@@ -1,0 +1,10 @@
+{
+  "version": "2.0.6",
+  "architecture": "v1.8.8 polished shell + v1.5.9 hidden controller/service host + individually mounted functional page content",
+  "functional_page_mounting": true,
+  "legacy_tabcontrol_mounted": false,
+  "players_panel_connected": true,
+  "toolbar_backend_wiring": true,
+  "xaml_parse_validation": "passed",
+  "native_wpf_compile": "not_run_no_dotnet_windows_desktop_sdk_in_environment"
+}

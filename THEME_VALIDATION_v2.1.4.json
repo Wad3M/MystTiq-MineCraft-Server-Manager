@@ -1,0 +1,27 @@
+{
+  "version": "2.1.5",
+  "xaml_parse": "passed",
+  "active_theme_palette_check": "passed",
+  "themes_checked": [
+    "Minecraft",
+    "ModernDark",
+    "Light",
+    "Underworld",
+    "Ender",
+    "Aether"
+  ],
+  "controls": [
+    "TextBox",
+    "PasswordBox",
+    "ComboBox",
+    "ComboBoxItem",
+    "ListBox",
+    "ListBoxItem",
+    "DataGrid",
+    "DataGridColumnHeader",
+    "DataGridRow",
+    "DataGridCell",
+    "ToolTip"
+  ],
+  "editable_combo_part": true
+}

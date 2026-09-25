@@ -1,0 +1,27 @@
+# .NET / Visual Studio build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+.idea/
+*.rsuser
+TestResults/
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Secrets / local config
+*.pfx
+*.snk
+appsettings.*.local.json
+.env

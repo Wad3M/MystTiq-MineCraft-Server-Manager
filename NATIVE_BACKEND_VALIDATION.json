@@ -1,0 +1,21 @@
+{
+  "version": "2.1.0",
+  "architecture": "native-services",
+  "legacy_mainwindow_instantiated": false,
+  "legacy_mainwindow_excluded_from_build": true,
+  "fake_dashboard_sample_data_removed": true,
+  "future_sidebar_options_retained": [
+    "Datapacks",
+    "Resource Packs",
+    "Templates",
+    "Plugin Packs"
+  ],
+  "future_sidebar_options_service_backed": true,
+  "selected_and_running_server_separated": true,
+  "force_kill_confirmation": true,
+  "shell_owns_shutdown": true,
+  "shell_owns_file_dialogs": true,
+  "xaml_parse_validation": "passed",
+  "native_compile": "not_performed",
+  "native_compile_reason": "The execution host does not contain a .NET SDK and outbound container networking prevented installing one."
+}

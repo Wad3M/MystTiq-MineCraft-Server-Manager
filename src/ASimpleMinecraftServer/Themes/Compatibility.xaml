@@ -1,0 +1,165 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      MystMC v2.1 compatibility resources.
+      The native backend pages inherited semantic resource names from the v1.5.x UI.
+      These aliases intentionally use DynamicResource so the v1.8.8 theme remains authoritative.
+    -->
+
+    <!-- Legacy semantic brushes mapped into the active MystUI theme. -->
+    <SolidColorBrush x:Key="Green" Color="#55B84A"/>
+    <SolidColorBrush x:Key="DarkGreen" Color="#267A34"/>
+    <SolidColorBrush x:Key="StatusGray" Color="#7F8C8D"/>
+    <SolidColorBrush x:Key="ActionBlue" Color="#237FC4"/>
+    <SolidColorBrush x:Key="ActionBlueHover" Color="#3296DE"/>
+    <SolidColorBrush x:Key="ActionBlueDark" Color="#12578B"/>
+    <SolidColorBrush x:Key="ActionAmber" Color="#E6A62B"/>
+    <SolidColorBrush x:Key="ActionAmberHover" Color="#F1B944"/>
+    <SolidColorBrush x:Key="ActionAmberDark" Color="#9B6912"/>
+    <SolidColorBrush x:Key="ActionPurple" Color="#8058C7"/>
+    <SolidColorBrush x:Key="ActionPurpleHover" Color="#9A73DD"/>
+    <SolidColorBrush x:Key="ActionPurpleDark" Color="#56368D"/>
+    <SolidColorBrush x:Key="ActionRed" Color="#C9423D"/>
+    <SolidColorBrush x:Key="ActionRedHover" Color="#DE5C56"/>
+    <SolidColorBrush x:Key="ActionRedDark" Color="#8B2926"/>
+    <SolidColorBrush x:Key="ActionGreenHover" Color="#68C95B"/>
+
+    <!-- Theme-aware brush aliases used by legacy pages. -->
+    <SolidColorBrush x:Key="TextPrimary" Color="{DynamicResource TextColor}"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="Border" Color="{DynamicResource BorderColor}"/>
+    <SolidColorBrush x:Key="BorderStrong" Color="{DynamicResource BorderHoverColor}"/>
+    <SolidColorBrush x:Key="Surface" Color="{DynamicResource PanelColor}"/>
+    <SolidColorBrush x:Key="CardBackground" Color="{DynamicResource PanelColor}"/>
+    <SolidColorBrush x:Key="InputBackground" Color="{DynamicResource PanelAltColor}"/>
+    <SolidColorBrush x:Key="NavigationHover" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="NavigationHoverBorder" Color="#55FFFFFF"/>
+    <SolidColorBrush x:Key="NavigationSelected" Color="#334EA83A"/>
+    <SolidColorBrush x:Key="NavigationSelectedHover" Color="#555CBF4A"/>
+
+    <!--
+      Brush aliases above are placeholders only for direct StaticResource lookup.
+      The style definitions below use DynamicResource and therefore follow the live theme.
+    -->
+
+    <Style x:Key="SolidActionButtonBase" TargetType="Button">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{DynamicResource ButtonBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTheme}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="Margin" Value="3,0,0,0"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.88"/></Trigger>
+                        <Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.72"/></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter TargetName="B" Property="Opacity" Value="0.45"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="BlueActionButton" TargetType="Button" BasedOn="{StaticResource SolidActionButtonBase}">
+        <Setter Property="Background" Value="{StaticResource ActionBlue}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ActionBlueDark}"/>
+    </Style>
+    <Style x:Key="GreenActionButton" TargetType="Button" BasedOn="{StaticResource SolidActionButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderHoverBrush}"/>
+    </Style>
+    <Style x:Key="AmberActionButton" TargetType="Button" BasedOn="{StaticResource SolidActionButtonBase}">
+        <Setter Property="Foreground" Value="#171717"/>
+        <Setter Property="Background" Value="{StaticResource ActionAmber}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ActionAmberDark}"/>
+    </Style>
+    <Style x:Key="DangerActionButton" TargetType="Button" BasedOn="{StaticResource SolidActionButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ActionRedDark}"/>
+    </Style>
+    <Style x:Key="PurpleActionButton" TargetType="Button" BasedOn="{StaticResource SolidActionButtonBase}">
+        <Setter Property="Background" Value="{StaticResource ActionPurple}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ActionPurpleDark}"/>
+    </Style>
+
+    <Style x:Key="LightButton" TargetType="Button" BasedOn="{StaticResource SolidActionButtonBase}">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource ButtonBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTheme}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+    </Style>
+    <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BlueActionButton}"/>
+    <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource GreenActionButton}"/>
+    <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource AmberActionButton}"/>
+    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource DangerActionButton}"/>
+    <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource LightButton}"/>
+    <Style x:Key="GreenButton" TargetType="Button" BasedOn="{StaticResource GreenActionButton}"/>
+
+    <Style x:Key="SectionHeader" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,4,0,8"/>
+    </Style>
+    <Style x:Key="FieldCaption" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
+    <Style x:Key="NavigationButton" TargetType="Button" BasedOn="{StaticResource LightButton}">
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="MinHeight" Value="40"/>
+    </Style>
+    <Style x:Key="NavIconTile" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource PanelAltBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTheme}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    <Style x:Key="QuickIconTile" TargetType="Border" BasedOn="{StaticResource NavIconTile}"/>
+
+    <Style x:Key="QuickToolButton" TargetType="Button" BasedOn="{StaticResource LightButton}">
+        <Setter Property="MinHeight" Value="52"/>
+        <Setter Property="Padding" Value="10"/>
+    </Style>
+    <Style x:Key="BlueQuickToolButton" TargetType="Button" BasedOn="{StaticResource QuickToolButton}">
+        <Setter Property="Background" Value="{StaticResource ActionBlue}"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style x:Key="AmberQuickToolButton" TargetType="Button" BasedOn="{StaticResource QuickToolButton}">
+        <Setter Property="Background" Value="{StaticResource ActionAmber}"/>
+        <Setter Property="Foreground" Value="#171717"/>
+    </Style>
+    <Style x:Key="PurpleQuickToolButton" TargetType="Button" BasedOn="{StaticResource QuickToolButton}">
+        <Setter Property="Background" Value="{StaticResource ActionPurple}"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <Style x:Key="ConsoleOptionCheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="Margin" Value="4,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Pixel icon resources retained for old page XAML that still references them. -->
+    <Geometry x:Key="PixelIconDashboard">M2,10 L8,4 L14,10 L14,15 L9,15 L9,11 L7,11 L7,15 L2,15 Z</Geometry>
+    <Geometry x:Key="PixelIconCreate">M3,3 L13,3 L13,13 L3,13 Z M8,5 L8,11 M5,8 L11,8</Geometry>
+    <Geometry x:Key="PixelIconConsole">M2,3 L14,3 L14,13 L2,13 Z M4,6 L7,8 L4,10 M8,10 L12,10</Geometry>
+    <Geometry x:Key="PixelIconWorlds">M8,1 A7,7 0 1 0 8,15 A7,7 0 1 0 8,1</Geometry>
+    <Geometry x:Key="PixelIconPlugins">M6,2 L10,2 L10,6 L14,6 L14,10 L10,10 L10,14 L6,14 L6,10 L2,10 L2,6 L6,6 Z</Geometry>
+    <Geometry x:Key="PixelIconBackups">M3,2 L12,2 L14,4 L14,14 L2,14 L2,2 Z M5,2 L5,6 L11,6 L11,2 M5,10 L11,10 L11,13 L5,13 Z</Geometry>
+    <Geometry x:Key="PixelIconConfiguration">M7,1 L9,1 L10,4 L13,3 L14,5 L12,7 L15,8 L15,10 L12,11 L14,13 L13,15 L10,14 L9,17 L7,17 L6,14 L3,15 L2,13 L4,11 L1,10 L1,8 L4,7 L2,5 L3,3 L6,4 Z</Geometry>
+    <Geometry x:Key="PixelIconManagement">M2,4 L14,4 L14,13 L2,13 Z M5,1 L11,1 L11,4 L5,4 Z</Geometry>
+    <Geometry x:Key="PixelIconFolder">M1,4 L6,4 L8,6 L15,6 L15,14 L1,14 Z</Geometry>
+    <Geometry x:Key="PixelIconAbout">M8,1 A7,7 0 1 0 8,15 A7,7 0 1 0 8,1 M7,7 L9,7 L9,12 L7,12 Z M7,4 L9,4 L9,6 L7,6 Z</Geometry>
+</ResourceDictionary>

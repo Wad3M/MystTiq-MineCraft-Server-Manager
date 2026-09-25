@@ -1,0 +1,1 @@
+namespace ASimpleMinecraftServer.Models; public sealed class PluginCompatibilityItem { public string Plugin {get;set;}=string.Empty; public string ApiVersion {get;set;}="Unknown"; public string Status {get;set;}=string.Empty; public string Detail {get;set;}=string.Empty; }
