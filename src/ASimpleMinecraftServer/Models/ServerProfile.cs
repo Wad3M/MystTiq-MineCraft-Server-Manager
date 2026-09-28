@@ -34,8 +34,13 @@ public sealed class ServerProfile : INotifyPropertyChanged
             if (string.Equals(_runtimeState, value, StringComparison.Ordinal)) return;
             _runtimeState = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(PickerLabel));
         }
     }
+
+    /// <summary>Name shown in the server picker, with a dot while the server is running.</summary>
+    [JsonIgnore]
+    public string PickerLabel => _runtimeState is "Running" or "Recovered" ? $"● {Name}" : Name;
 
     [JsonIgnore]
     public int Port => GetPort();
@@ -48,6 +53,7 @@ public sealed class ServerProfile : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(Port));
         OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(PickerLabel));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

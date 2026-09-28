@@ -9,9 +9,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>ASimpleMinecraftServer</AssemblyName>
     <RootNamespace>ASimpleMinecraftServer</RootNamespace>
-    <Version>2.1.5</Version>
-    <FileVersion>2.1.5.0</FileVersion>
-    <AssemblyVersion>2.1.5.0</AssemblyVersion>
+    <Version>2.2.0</Version>
+    <FileVersion>2.2.0.0</FileVersion>
+    <AssemblyVersion>2.2.0.0</AssemblyVersion>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

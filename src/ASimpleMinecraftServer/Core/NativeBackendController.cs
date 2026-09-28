@@ -3,7 +3,7 @@ using ASimpleMinecraftServer.Services;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Net.NetworkInformation;
 
 namespace ASimpleMinecraftServer.Core;
 
@@ -16,16 +16,10 @@ public sealed class NativeBackendController : IDisposable
     private readonly DownloadService _downloads = new();
     private readonly VersionManager _versions;
     private readonly ServerInstaller _serverInstaller;
-    private readonly object _consoleLock = new();
-    private readonly List<string> _consoleLines = new();
-    private DateTimeOffset? _startedAt;
+    private readonly Dictionary<ServerProfile, ServerInstance> _instances = new();
     private ServerProfile? _selectedServer;
-    private ServerProfile? _runningServer;
 
-    private readonly List<string> _onlinePlayers = new();
     public ObservableCollection<ServerProfile> Servers { get; }
-    public IReadOnlyList<string> OnlinePlayers { get { lock (_onlinePlayers) return _onlinePlayers.ToArray(); } }
-    public ServerLauncher Launcher { get; } = new();
     public BackupService Backups { get; }
     public WorldService Worlds { get; } = new();
     public PluginService Plugins { get; } = new();
@@ -37,12 +31,23 @@ public sealed class NativeBackendController : IDisposable
     public ScheduledTaskStore ScheduledTasks { get; } = new();
 
     public ServerProfile? SelectedServer => _selectedServer;
-    public ServerProfile? RunningServer => _runningServer;
-    public bool IsRunning => Launcher.IsRunning;
-    public bool IsRecoveredProcess => Launcher.IsAttachedProcess;
-    public bool CanSendCommands => Launcher.CanSendCommands;
-    public DateTimeOffset? StartedAt => _startedAt;
-    public TimeSpan Uptime => _startedAt is null ? TimeSpan.Zero : DateTimeOffset.Now - _startedAt.Value;
+
+    // The members below describe the *selected* server. Every server has its own
+    // ServerInstance, so selecting a different server switches what these report.
+    private ServerInstance? Selected => _selectedServer is null ? null : GetInstance(_selectedServer);
+    public bool IsRunning => Selected?.IsRunning ?? false;
+    public bool IsRecoveredProcess => Selected?.IsRecoveredProcess ?? false;
+    public bool CanSendCommands => Selected?.CanSendCommands ?? false;
+    public DateTimeOffset? StartedAt => Selected?.StartedAt;
+    public TimeSpan Uptime => Selected?.Uptime ?? TimeSpan.Zero;
+    public IReadOnlyList<string> OnlinePlayers => Selected?.OnlinePlayers ?? [];
+
+    /// <summary>All servers that currently have a live Java process.</summary>
+    public IReadOnlyList<ServerProfile> RunningServers
+    {
+        get { lock (_instances) return _instances.Values.Where(i => i.IsRunning).Select(i => i.Profile).ToList(); }
+    }
+    public bool IsServerRunning(ServerProfile profile) => GetInstance(profile).IsRunning;
     public string DataDirectory { get; }
     public string BackupRoot => Backups.BackupRoot;
     public IReadOnlyList<string> SupportedServerTypes => VersionManager.SupportedServerTypes;
@@ -69,27 +74,39 @@ public sealed class NativeBackendController : IDisposable
         catch { backupRoot = Path.Combine(DataDirectory, "Backups"); }
         Backups = new BackupService(backupRoot);
 
-        Launcher.OutputReceived += Launcher_OutputReceived;
-        Launcher.Exited += Launcher_Exited;
-
-        RecoverPreviousSession();
-        _selectedServer = _runningServer ?? Servers.FirstOrDefault();
+        RecoverPreviousSessions();
+        _selectedServer = RunningServers.FirstOrDefault() ?? Servers.FirstOrDefault();
     }
 
-    private void RecoverPreviousSession()
+    private ServerInstance GetInstance(ServerProfile profile)
     {
-        var session = _runtimeSessions.Load();
-        if (session is null) return;
-        var profile = Servers.FirstOrDefault(s => PathsEqual(s.Folder, session.ServerFolder));
-        if (profile is null || !Launcher.TryAttach(session.ProcessId))
+        lock (_instances)
         {
-            _runtimeSessions.Clear();
-            return;
+            if (_instances.TryGetValue(profile, out var existing)) return existing;
+            var instance = new ServerInstance(profile);
+            instance.ConsoleLineReceived += Instance_ConsoleLineReceived;
+            instance.PlayersChanged += Instance_PlayersChanged;
+            instance.Exited += Instance_Exited;
+            _instances[profile] = instance;
+            return instance;
         }
-        _runningServer = profile;
-        _startedAt = session.StartedAt;
-        profile.RuntimeState = "Recovered";
-        AddConsole("[Manager] Reconnected to the existing Java server process. Console input is unavailable for recovered processes.");
+    }
+
+    private void RecoverPreviousSessions()
+    {
+        var recovered = new List<RuntimeSession>();
+        foreach (var session in _runtimeSessions.LoadAll())
+        {
+            var profile = Servers.FirstOrDefault(s => PathsEqual(s.Folder, session.ServerFolder));
+            if (profile is null) continue;
+            var instance = GetInstance(profile);
+            if (instance.IsRunning || !instance.Launcher.TryAttach(session.ProcessId)) continue;
+            instance.StartedAt = session.StartedAt;
+            profile.RuntimeState = "Recovered";
+            instance.AddConsole("[Manager] Reconnected to the existing Java server process. Console input is unavailable for recovered processes.");
+            recovered.Add(session);
+        }
+        _runtimeSessions.ReplaceAll(recovered);
     }
 
     public void SelectServer(ServerProfile? profile)
@@ -132,14 +149,13 @@ public sealed class NativeBackendController : IDisposable
             Math.Max(1, memoryGb),
             customJarPath);
 
-        AddConsole($"[Manager] Installing {request.Type} for Minecraft {request.Version} into {request.Folder}...");
         var profile = await _serverInstaller.InstallAsync(request, cancellationToken);
         profile.JavaPath = string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim();
         profile.RefreshDerivedProperties();
         Servers.Add(profile);
         SaveProfiles();
         SelectServer(profile);
-        AddConsole($"[Manager] Installed {profile.Type} {profile.Version} as '{profile.Name}'.");
+        GetInstance(profile).AddConsole($"[Manager] Installed {profile.Type} {profile.Version} as '{profile.Name}' in {profile.Folder}.");
         return profile;
     }
 
@@ -196,87 +212,115 @@ public sealed class NativeBackendController : IDisposable
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public Task StartAsync(CancellationToken cancellationToken = default) => StartAsync(RequireSelected(), cancellationToken);
+
+    public async Task StartAsync(ServerProfile profile, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var profile = RequireSelected();
-        if (Launcher.IsRunning) throw new InvalidOperationException($"{_runningServer?.Name ?? "A server"} is already running.");
+        var instance = GetInstance(profile);
+        if (instance.IsRunning) throw new InvalidOperationException($"{profile.Name} is already running.");
         ValidateStart(profile);
-        Launcher.Start(profile);
-        _runningServer = profile;
-        _startedAt = DateTimeOffset.Now;
+        EnsurePortAvailable(profile);
+        instance.Launcher.Start(profile);
+        instance.StartedAt = DateTimeOffset.Now;
         profile.RuntimeState = "Running";
-        if (Launcher.ProcessId is int pid) _runtimeSessions.Save(new RuntimeSession(pid, profile.Folder, _startedAt.Value));
-        AddConsole($"[Manager] Started {profile.Name}.");
+        if (instance.ProcessId is int pid) _runtimeSessions.Save(new RuntimeSession(pid, profile.Folder, instance.StartedAt.Value));
+        instance.AddConsole($"[Manager] Started {profile.Name} on port {profile.Port}.");
         StateChanged?.Invoke(this, EventArgs.Empty);
         await Task.CompletedTask;
     }
 
-    public async Task<bool> StopGracefullyAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public Task<bool> StopGracefullyAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
+        StopGracefullyAsync(RequireSelected(), timeout, cancellationToken);
+
+    public async Task<bool> StopGracefullyAsync(ServerProfile profile, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        if (!Launcher.IsRunning) return true;
-        AddConsole("[Manager] Sending graceful stop command...");
-        var stopped = await Launcher.TryStopGracefullyAsync(timeout, cancellationToken);
-        if (!stopped) AddConsole("[Manager] The server did not stop before the timeout.");
+        var instance = GetInstance(profile);
+        if (!instance.IsRunning) return true;
+        instance.AddConsole("[Manager] Sending graceful stop command...");
+        var stopped = await instance.Launcher.TryStopGracefullyAsync(timeout, cancellationToken);
+        if (!stopped) instance.AddConsole("[Manager] The server did not stop before the timeout.");
         return stopped;
     }
 
-    public async Task ForceKillAsync(CancellationToken cancellationToken = default)
+    public Task ForceKillAsync(CancellationToken cancellationToken = default) => ForceKillAsync(RequireSelected(), cancellationToken);
+
+    public async Task ForceKillAsync(ServerProfile profile, CancellationToken cancellationToken = default)
     {
-        if (!Launcher.IsRunning) return;
-        AddConsole("[Manager] Force-terminating the Java process.");
-        await Launcher.ForceKillAsync(cancellationToken);
+        var instance = GetInstance(profile);
+        if (!instance.IsRunning) return;
+        instance.AddConsole("[Manager] Force-terminating the Java process.");
+        await instance.Launcher.ForceKillAsync(cancellationToken);
     }
 
-    public async Task RestartAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    /// <summary>Stops every running server in parallel. Returns the servers that did not stop in time.</summary>
+    public async Task<IReadOnlyList<ServerProfile>> StopAllGracefullyAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        var profile = _runningServer ?? RequireSelected();
-        if (Launcher.IsRunning)
+        var running = RunningServers;
+        var results = await Task.WhenAll(running.Select(async p => (Profile: p, Stopped: await StopGracefullyAsync(p, timeout, cancellationToken))));
+        return results.Where(r => !r.Stopped).Select(r => r.Profile).ToList();
+    }
+
+    public Task RestartAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => RestartAsync(RequireSelected(), timeout, cancellationToken);
+
+    public async Task RestartAsync(ServerProfile profile, TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        if (GetInstance(profile).IsRunning)
         {
-            var stopped = await StopGracefullyAsync(timeout, cancellationToken);
+            var stopped = await StopGracefullyAsync(profile, timeout, cancellationToken);
             if (!stopped) throw new TimeoutException("The server did not stop gracefully. Force kill it before restarting.");
         }
-        SelectServer(profile);
-        await StartAsync(cancellationToken);
+        await StartAsync(profile, cancellationToken);
     }
 
-    public void SendCommand(string command)
+    public void SendCommand(string command) => SendCommand(RequireSelected(), command);
+
+    public void SendCommand(ServerProfile profile, string command)
     {
-        if (!Launcher.CanSendCommands) throw new InvalidOperationException(Launcher.IsAttachedProcess
+        var instance = GetInstance(profile);
+        if (!instance.CanSendCommands) throw new InvalidOperationException(instance.IsRecoveredProcess
             ? "Commands are unavailable because MystMC recovered an already-running Java process."
-            : "The server is not running.");
+            : $"{profile.Name} is not running.");
         if (string.IsNullOrWhiteSpace(command)) return;
-        AddConsole("> " + command.Trim());
-        Launcher.SendCommand(command.Trim());
+        instance.AddConsole("> " + command.Trim());
+        instance.Launcher.SendCommand(command.Trim());
     }
 
     public void RequestPlayers()
     {
-        if (Launcher.CanSendCommands) Launcher.SendCommand("list");
+        if (Selected is { CanSendCommands: true } instance) instance.Launcher.SendCommand("list");
     }
 
     public async Task<BackupRecord> CreateBackupAsync(CancellationToken cancellationToken = default)
     {
         var profile = RequireSelected();
-        if (ReferenceEquals(profile, _runningServer) && Launcher.IsRunning && !Launcher.CanSendCommands)
-            throw new InvalidOperationException("A safe live backup is unavailable for a recovered server process. Stop it first.");
-        if (ReferenceEquals(profile, _runningServer) && Launcher.CanSendCommands)
-        {
-            Launcher.SendCommand("save-all flush");
-            await Task.Delay(1200, cancellationToken);
-        }
+        await FlushBeforeBackupAsync(profile, 1200, cancellationToken);
         var backup = await Backups.CreateAsync(profile, "Manual", cancellationToken: cancellationToken);
-        AddConsole($"[Manager] Backup created: {backup.Name}");
+        GetInstance(profile).AddConsole($"[Manager] Backup created: {backup.Name}");
         StateChanged?.Invoke(this, EventArgs.Empty);
         return backup;
     }
 
-    public IReadOnlyList<string> ConsoleSnapshot()
+    private async Task FlushBeforeBackupAsync(ServerProfile profile, int delayMs, CancellationToken cancellationToken)
     {
-        lock (_consoleLock) return _consoleLines.ToArray();
+        var instance = GetInstance(profile);
+        if (instance.IsRunning && !instance.CanSendCommands)
+            throw new InvalidOperationException("A safe live backup is unavailable for a recovered server process. Stop it first.");
+        if (instance.CanSendCommands)
+        {
+            instance.Launcher.SendCommand("save-all flush");
+            await Task.Delay(delayMs, cancellationToken);
+        }
     }
 
-    public bool TryGetPerformanceSnapshot(out TimeSpan cpuTime, out long memoryBytes) => Launcher.TryGetPerformanceSnapshot(out cpuTime, out memoryBytes);
+    public IReadOnlyList<string> ConsoleSnapshot() => Selected?.ConsoleSnapshot() ?? [];
+
+    public bool TryGetPerformanceSnapshot(out TimeSpan cpuTime, out long memoryBytes)
+    {
+        cpuTime = TimeSpan.Zero;
+        memoryBytes = 0;
+        return Selected?.Launcher.TryGetPerformanceSnapshot(out cpuTime, out memoryBytes) ?? false;
+    }
 
     public Task<ServerHealthReport> AnalyzeHealthAsync(CancellationToken cancellationToken = default) =>
         _healthAnalyzer.AnalyzeAsync(RequireSelected(), BackupRoot, cancellationToken);
@@ -323,23 +367,20 @@ public sealed class NativeBackendController : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             var interval = TimeSpan.FromMinutes(Math.Max(5, profile.BackupIntervalMinutes));
             if (profile.LastAutomaticBackupAt is { } last && now - last < interval) continue;
-            if (ReferenceEquals(profile, _runningServer) && Launcher.IsRunning && !Launcher.CanSendCommands) continue;
+            var instance = GetInstance(profile);
+            if (instance.IsRunning && !instance.CanSendCommands) continue;
             try
             {
-                if (ReferenceEquals(profile, _runningServer) && Launcher.CanSendCommands)
-                {
-                    Launcher.SendCommand("save-all flush");
-                    await Task.Delay(1000, cancellationToken);
-                }
+                await FlushBeforeBackupAsync(profile, 1000, cancellationToken);
                 await Backups.CreateAsync(profile, "Automatic", cancellationToken: cancellationToken);
                 profile.LastAutomaticBackupAt = now;
                 Backups.ApplyAutomaticRetention(profile, Math.Max(1, profile.BackupRetentionCount));
                 SaveProfiles();
-                AddConsole($"[Manager] Automatic backup completed for {profile.Name}.");
+                instance.AddConsole($"[Manager] Automatic backup completed for {profile.Name}.");
             }
             catch (Exception ex)
             {
-                AddConsole($"[Manager] Automatic backup failed for {profile.Name}: {ex.Message}");
+                instance.AddConsole($"[Manager] Automatic backup failed for {profile.Name}: {ex.Message}");
             }
         }
 
@@ -352,33 +393,30 @@ public sealed class NativeBackendController : IDisposable
             try
             {
                 if (target is null) throw new InvalidOperationException("Scheduled task server profile no longer exists.");
+                var targetInstance = GetInstance(target);
                 switch (task.Action.ToLowerInvariant())
                 {
                     case "broadcast":
-                        if (!ReferenceEquals(target, _runningServer) || !Launcher.CanSendCommands) throw new InvalidOperationException("Target server is not running with command control.");
-                        Launcher.SendCommand("say " + task.Payload);
+                        SendCommand(target, "say " + task.Payload);
                         break;
                     case "command":
-                        if (!ReferenceEquals(target, _runningServer) || !Launcher.CanSendCommands) throw new InvalidOperationException("Target server is not running with command control.");
-                        Launcher.SendCommand(task.Payload);
+                        SendCommand(target, task.Payload);
                         break;
                     case "backup":
-                        if (ReferenceEquals(target, _runningServer) && Launcher.IsRunning && !Launcher.CanSendCommands) throw new InvalidOperationException("Recovered server cannot be safely backed up live.");
-                        if (ReferenceEquals(target, _runningServer) && Launcher.CanSendCommands) { Launcher.SendCommand("save-all flush"); await Task.Delay(1000, cancellationToken); }
+                        await FlushBeforeBackupAsync(target, 1000, cancellationToken);
                         await Backups.CreateAsync(target, "Automatic", cancellationToken: cancellationToken);
                         break;
                     case "start":
-                        if (Launcher.IsRunning) throw new InvalidOperationException("Another server is already running.");
-                        SelectServer(target);
-                        await StartAsync(cancellationToken);
+                        if (targetInstance.IsRunning) throw new InvalidOperationException($"{target.Name} is already running.");
+                        await StartAsync(target, cancellationToken);
                         break;
                     case "stop":
-                        if (!ReferenceEquals(target, _runningServer)) throw new InvalidOperationException("Target server is not running.");
-                        if (!await StopGracefullyAsync(TimeSpan.FromSeconds(20), cancellationToken)) throw new TimeoutException("Server did not stop within 20 seconds.");
+                        if (!targetInstance.IsRunning) throw new InvalidOperationException($"{target.Name} is not running.");
+                        if (!await StopGracefullyAsync(target, TimeSpan.FromSeconds(20), cancellationToken)) throw new TimeoutException("Server did not stop within 20 seconds.");
                         break;
                     case "restart":
-                        if (!ReferenceEquals(target, _runningServer)) throw new InvalidOperationException("Target server is not running.");
-                        await RestartAsync(TimeSpan.FromSeconds(20), cancellationToken);
+                        if (!targetInstance.IsRunning) throw new InvalidOperationException($"{target.Name} is not running.");
+                        await RestartAsync(target, TimeSpan.FromSeconds(20), cancellationToken);
                         break;
                     default: throw new InvalidOperationException($"Unsupported scheduled action '{task.Action}'.");
                 }
@@ -387,7 +425,7 @@ public sealed class NativeBackendController : IDisposable
             catch (Exception ex)
             {
                 task.LastResult = ex.Message;
-                AddConsole($"[Manager] Scheduled task '{task.Name}' failed: {ex.Message}");
+                if (target is not null) GetInstance(target).AddConsole($"[Manager] Scheduled task '{task.Name}' failed: {ex.Message}");
             }
             task.LastRunAt = now;
             changed = true;
@@ -397,63 +435,47 @@ public sealed class NativeBackendController : IDisposable
 
     public ServerProfile RequireSelected() => _selectedServer ?? throw new InvalidOperationException("Select a server first.");
 
-    private void Launcher_OutputReceived(object? sender, string line)
+    // Console and player events are only forwarded for the selected server, so the
+    // console and players pages always show the server the user is looking at.
+    private void Instance_ConsoleLineReceived(object? sender, string line)
     {
-        AddConsole(line);
-        ParsePlayerLine(line);
+        if (sender is ServerInstance instance && ReferenceEquals(instance.Profile, _selectedServer))
+            ConsoleLineReceived?.Invoke(this, line);
     }
 
-    private void Launcher_Exited(object? sender, ServerProcessExitedEventArgs e)
+    private void Instance_PlayersChanged(object? sender, EventArgs e)
     {
-        _runtimeSessions.Clear();
-        var profile = _runningServer;
-        if (profile is not null) profile.RuntimeState = e.StopWasRequested ? "Stopped" : "Failed";
+        if (sender is ServerInstance instance && ReferenceEquals(instance.Profile, _selectedServer))
+            PlayersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Instance_Exited(object? sender, ServerProcessExitedEventArgs e)
+    {
+        if (sender is not ServerInstance instance) return;
+        var profile = instance.Profile;
+        _runtimeSessions.Remove(profile.Folder);
+        profile.RuntimeState = e.StopWasRequested ? "Stopped" : "Failed";
         var text = e.WasForceKilled ? "force killed" : e.StopWasRequested ? "stopped" : "exited unexpectedly";
-        AddConsole($"[Manager] Server {text}{(e.ExitCode is int code ? $" (exit code {code})" : string.Empty)}.");
-        _runningServer = null;
-        _startedAt = null;
-        lock (_onlinePlayers) _onlinePlayers.Clear();
-        PlayersChanged?.Invoke(this, EventArgs.Empty);
+        instance.AddConsole($"[Manager] Server {text}{(e.ExitCode is int code ? $" (exit code {code})" : string.Empty)}.");
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void AddConsole(string line)
+    /// <summary>
+    /// Refuses to start a server whose port is already used by another MystMC server
+    /// or by any other program listening on this machine.
+    /// </summary>
+    private void EnsurePortAvailable(ServerProfile profile)
     {
-        lock (_consoleLock)
-        {
-            _consoleLines.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
-            if (_consoleLines.Count > 5000) _consoleLines.RemoveRange(0, _consoleLines.Count - 5000);
-        }
-        ConsoleLineReceived?.Invoke(this, line);
-    }
+        var port = profile.Port;
+        var clash = RunningServers.FirstOrDefault(p => !ReferenceEquals(p, profile) && p.Port == port);
+        if (clash is not null)
+            throw new InvalidOperationException($"Port {port} is already used by '{clash.Name}'. Give '{profile.Name}' a different server-port in its settings.");
 
-    private void ParsePlayerLine(string line)
-    {
-        var list = Regex.Match(line, @"There are \d+ of a max of \d+ players online:?\s*(.*)$", RegexOptions.IgnoreCase);
-        if (list.Success)
-        {
-            var names = list.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            lock (_onlinePlayers)
-            {
-                _onlinePlayers.Clear();
-                foreach (var name in names.Where(n => !string.IsNullOrWhiteSpace(n))) _onlinePlayers.Add(name);
-            }
-            PlayersChanged?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-        var joined = Regex.Match(line, @":\s*([^\s]+) joined the game", RegexOptions.IgnoreCase);
-        if (joined.Success)
-        {
-            lock (_onlinePlayers) if (!_onlinePlayers.Contains(joined.Groups[1].Value)) _onlinePlayers.Add(joined.Groups[1].Value);
-            PlayersChanged?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-        var left = Regex.Match(line, @":\s*([^\s]+) left the game", RegexOptions.IgnoreCase);
-        if (left.Success)
-        {
-            lock (_onlinePlayers) _onlinePlayers.Remove(left.Groups[1].Value);
-            PlayersChanged?.Invoke(this, EventArgs.Empty);
-        }
+        bool inUse;
+        try { inUse = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(ep => ep.Port == port); }
+        catch (NetworkInformationException) { inUse = false; }
+        if (inUse)
+            throw new InvalidOperationException($"Port {port} is already in use by another program. Give '{profile.Name}' a different server-port in its settings.");
     }
 
     private static void ValidateStart(ServerProfile profile)
@@ -490,9 +512,17 @@ public sealed class NativeBackendController : IDisposable
 
     public void Dispose()
     {
-        Launcher.OutputReceived -= Launcher_OutputReceived;
-        Launcher.Exited -= Launcher_Exited;
-        Launcher.Dispose();
+        lock (_instances)
+        {
+            foreach (var instance in _instances.Values)
+            {
+                instance.ConsoleLineReceived -= Instance_ConsoleLineReceived;
+                instance.PlayersChanged -= Instance_PlayersChanged;
+                instance.Exited -= Instance_Exited;
+                instance.Dispose();
+            }
+            _instances.Clear();
+        }
         _pluginCatalog.Dispose();
         _downloads.Dispose();
         GC.SuppressFinalize(this);

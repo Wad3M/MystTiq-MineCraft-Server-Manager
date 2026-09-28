@@ -61,7 +61,7 @@ public partial class PrototypeWindow : Window
     {
         try
         {
-            App.WriteStartupLog("MystMC v2.1.5 shell loaded; initializing native backend services.");
+            App.WriteStartupLog("MystMC v2.2.0 shell loaded; initializing native backend services.");
             BuildToolbar();
             BuildNavigation();
             RestoreTheme();
@@ -99,7 +99,8 @@ public partial class PrototypeWindow : Window
             return;
         }
 
-        if (!_backend.IsRunning)
+        var running = _backend.RunningServers;
+        if (running.Count == 0)
         {
             CleanupBackend();
             _allowClose = true;
@@ -108,26 +109,28 @@ public partial class PrototypeWindow : Window
         }
 
         e.Cancel = true;
-        var runningName = _backend.RunningServer?.Name ?? "the Minecraft server";
+        var runningNames = string.Join(", ", running.Select(p => p.Name));
         var answer = MessageBox.Show(
-            $"{runningName} is still running.\n\nStop it safely and exit MystMC?",
-            "Server is running", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+            running.Count == 1
+                ? $"{runningNames} is still running.\n\nStop it safely and exit MystMC?"
+                : $"{running.Count} servers are still running: {runningNames}.\n\nStop them all safely and exit MystMC?",
+            "Servers are running", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
         if (answer == MessageBoxResult.Cancel) return;
         if (answer == MessageBoxResult.No)
         {
-            MessageBox.Show("MystMC cannot exit while it owns the running Java process. Stop the server first, or use Kill if absolutely necessary.", "MystMC", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("MystMC cannot exit while it owns running Java processes. Stop the servers first, or use Kill if absolutely necessary.", "MystMC", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         try
         {
-            PrototypeStatus.Text = "Stopping server before exit…";
-            var stopped = await _backend.StopGracefullyAsync(TimeSpan.FromSeconds(20));
-            if (!stopped)
+            PrototypeStatus.Text = running.Count == 1 ? "Stopping server before exit…" : $"Stopping {running.Count} servers before exit…";
+            var stuck = await _backend.StopAllGracefullyAsync(TimeSpan.FromSeconds(20));
+            if (stuck.Count > 0)
             {
-                var force = MessageBox.Show("The server did not stop within 20 seconds.\n\nForce kill the Java process? Unsaved world data could be lost.", "Server did not stop", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                var force = MessageBox.Show($"These servers did not stop within 20 seconds: {string.Join(", ", stuck.Select(p => p.Name))}.\n\nForce kill them? Unsaved world data could be lost.", "Server did not stop", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (force != MessageBoxResult.Yes) return;
-                await _backend.ForceKillAsync();
+                foreach (var profile in stuck) await _backend.ForceKillAsync(profile);
             }
             CleanupBackend();
             _allowClose = true;
@@ -248,7 +251,7 @@ public partial class PrototypeWindow : Window
                 "UI Preview" => BuildPreviewPage(),
                 _ => MessagePage(page, "This page is not available.")
             };
-            PrototypeStatus.Text = $"MystMC v2.1.5 — {page}";
+            PrototypeStatus.Text = $"MystMC v2.2.0 — {page}";
         }
         catch (Exception ex)
         {
@@ -284,7 +287,7 @@ public partial class PrototypeWindow : Window
         metrics.Children.Add(Metric("mspt", "MSPT", "—", "Use Spark/Paper metrics", 0));
         metrics.Children.Add(Metric("cpu", "CPU USAGE", _backend.IsRunning ? $"{_lastCpuPercent:N1}%" : "—", "Managed Java process", Math.Clamp(_lastCpuPercent, 0, 100)));
         var memoryMb = GetMemoryMb();
-        var allocatedMb = (_backend.RunningServer?.MemoryGb ?? _backend.SelectedServer?.MemoryGb ?? 0) * 1024d;
+        var allocatedMb = (_backend.SelectedServer?.MemoryGb ?? 0) * 1024d;
         metrics.Children.Add(Metric("memory", "MEMORY USAGE", _backend.IsRunning ? $"{memoryMb:N0} MB" : "—", allocatedMb > 0 ? $"Configured {allocatedMb / 1024:N0} GB" : "", allocatedMb > 0 ? Math.Min(100, memoryMb * 100 / allocatedMb) : 0));
         metrics.Children.Add(Metric("clock", "UPTIME", _backend.IsRunning ? FormatDuration(_backend.Uptime) : "—", _backend.IsRecoveredProcess ? "Recovered process" : "Managed by MystMC", _backend.IsRunning ? 100 : 0));
         root.Children.Add(metrics);
@@ -330,7 +333,58 @@ public partial class PrototypeWindow : Window
         else protection.Children.Add(Muted("No server selected."));
         protectionCard.Child = protection; Grid.SetColumn(protectionCard, 2); grid.Children.Add(protectionCard);
         root.Children.Add(grid);
+        root.Children.Add(BuildAllServersCard());
         return root;
+    }
+
+    /// <summary>Every server profile with its port and state, and a Start/Stop button for each.</summary>
+    private UIElement BuildAllServersCard()
+    {
+        var card = Card(); card.Padding = new Thickness(12); card.Margin = new Thickness(0, 8, 0, 0);
+        var stack = new StackPanel(); stack.Children.Add(TitleRow("worlds", "All Servers"));
+        if (_backend is null || _backend.Servers.Count == 0)
+        {
+            stack.Children.Add(Muted("No servers yet. Use Create Server to add one."));
+            card.Child = stack; return card;
+        }
+
+        foreach (var profile in _backend.Servers)
+        {
+            var running = _backend.IsServerRunning(profile);
+            var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var name = new TextBlock { Text = (ReferenceEquals(profile, _backend.SelectedServer) ? "▶ " : string.Empty) + profile.Name, FontWeight = FontWeights.SemiBold };
+            text.Children.Add(name);
+            text.Children.Add(Muted($"{profile.Type} {profile.Version}   •   Port {profile.Port}   •   {profile.MemoryGb} GB   •   {(running ? profile.RuntimeState : "Stopped")}"));
+            row.Children.Add(text);
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var target = profile;
+            if (!ReferenceEquals(profile, _backend.SelectedServer))
+                buttons.Children.Add(ActionButton("Select", (_, _) => ServerPicker.SelectedItem = target));
+            buttons.Children.Add(running
+                ? ActionButton("Stop", async (_, _) => await RunServerAction("Stop", target, async b =>
+                    {
+                        if (!await b.StopGracefullyAsync(target, TimeSpan.FromSeconds(20)))
+                            MessageBox.Show($"{target.Name} did not stop within 20 seconds. Select it and use Kill only if you are certain it is stuck.", "Stop timeout", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }))
+                : ActionButton("Start", async (_, _) => await RunServerAction("Start", target, b => b.StartAsync(target))));
+            Grid.SetColumn(buttons, 1); row.Children.Add(buttons);
+            stack.Children.Add(row);
+        }
+        card.Child = stack; return card;
+    }
+
+    private async Task RunServerAction(string action, ServerProfile profile, Func<NativeBackendController, Task> work)
+    {
+        if (_backend is null) return;
+        try { await work(_backend); }
+        catch (Exception ex) { ShowError($"{action} {profile.Name} failed", ex); }
+        RefreshShellStatus();
+        if (_currentPage == "Dashboard") PageContent.Content = BuildDashboard();
     }
 
     private UIElement BuildCreateServerPage()
@@ -731,7 +785,7 @@ public partial class PrototypeWindow : Window
         var settingsRow = new WrapPanel(); var auto = new CheckBox { Content = "Automatic backups", IsChecked = profile.AutomaticBackupsEnabled, Margin = new Thickness(0, 6, 15, 0) }; var interval = new TextBox { Text = profile.BackupIntervalMinutes.ToString(), Width = 70, Margin = new Thickness(0, 0, 8, 0) }; var retention = new TextBox { Text = profile.BackupRetentionCount.ToString(), Width = 70, Margin = new Thickness(0, 0, 8, 0) }; settingsRow.Children.Add(auto); settingsRow.Children.Add(new TextBlock { Text = "Interval (min)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) }); settingsRow.Children.Add(interval); settingsRow.Children.Add(new TextBlock { Text = "Keep", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) }); settingsRow.Children.Add(retention); settingsRow.Children.Add(ActionButton("Save", (_, _) => { profile.AutomaticBackupsEnabled = auto.IsChecked == true; if (int.TryParse(interval.Text, out var i)) profile.BackupIntervalMinutes = Math.Max(5, i); if (int.TryParse(retention.Text, out var r)) profile.BackupRetentionCount = Math.Max(1, r); _backend.SaveProfiles(); })); settings.Child = settingsRow; root.Children.Add(settings);
         var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         buttons.Children.Add(ActionButton("Backup Now", async (_, _) => { try { await _backend.CreateBackupAsync(); Navigate("Auto Backups"); } catch (Exception ex) { ShowError("Backup failed", ex); } }, "GreenActionButton"));
-        buttons.Children.Add(ActionButton("Restore", async (_, _) => { if (grid.SelectedItem is not BackupRecord b) return; if (_backend.IsRunning && ReferenceEquals(_backend.RunningServer, profile)) { MessageBox.Show("Stop the selected server before restoring a backup."); return; } if (!Confirm($"Restore '{b.Name}'? Existing server files will be replaced.")) return; await _backend.Backups.RestoreAsync(profile, b); MessageBox.Show("Backup restored."); }));
+        buttons.Children.Add(ActionButton("Restore", async (_, _) => { if (grid.SelectedItem is not BackupRecord b) return; if (_backend.IsServerRunning(profile)) { MessageBox.Show("Stop the selected server before restoring a backup."); return; } if (!Confirm($"Restore '{b.Name}'? Existing server files will be replaced.")) return; await _backend.Backups.RestoreAsync(profile, b); MessageBox.Show("Backup restored."); }));
         buttons.Children.Add(ActionButton("Delete", (_, _) => { if (grid.SelectedItem is BackupRecord b && Confirm($"Delete backup '{b.Name}'?")) { _backend.Backups.Delete(b); backups.Remove(b); } }, "DangerButton"));
         buttons.Children.Add(ActionButton("Open Backup Folder", (_, _) => OpenFolder(_backend.Backups.GetServerBackupFolder(profile))));
         root.Children.Add(buttons); return root;
@@ -759,7 +813,7 @@ public partial class PrototypeWindow : Window
 
     private UIElement BuildAboutPage()
     {
-        return MessagePage("MystMC v2.1.5", "Native Backend Integration\n\nThe v1.8.8 polished UI shell now talks directly to server services. No hidden legacy MainWindow is created.\n\nBackend lineage: A Simple Minecraft Server v1.5.9 Stabilization Build2.");
+        return MessagePage("MystMC v2.2.0", "Native Backend Integration\n\nThe v1.8.8 polished UI shell now talks directly to server services. No hidden legacy MainWindow is created.\n\nBackend lineage: A Simple Minecraft Server v1.5.9 Stabilization Build2.");
     }
 
     private UIElement BuildPreviewPage()
@@ -813,6 +867,8 @@ public partial class PrototypeWindow : Window
         try
         {
             _backend.SelectServer(ServerPicker.SelectedItem as ServerProfile);
+            // CPU is sampled per process; start a fresh sample for the newly selected server.
+            _lastCpuSampleAt = null; _lastCpuTime = TimeSpan.Zero; _lastCpuPercent = 0;
             Navigate(_currentPage);
         }
         catch (Exception ex) { ShowError("Could not select server", ex); }
@@ -875,13 +931,12 @@ public partial class PrototypeWindow : Window
     private void RefreshShellStatus()
     {
         if (_backend is null) return;
+        var runningCount = _backend.RunningServers.Count;
         ServerStatusText.Text = _backend.IsRunning ? (_backend.IsRecoveredProcess ? "Recovered" : "Running") : "Stopped";
-        ServerDetailText.Text = _backend.IsRunning
-            ? $"Running: {_backend.RunningServer?.Name ?? "Unknown"}"
-            : _backend.SelectedServer is null ? "No server selected" : $"Selected: {_backend.SelectedServer.Name}";
+        ServerDetailText.Text = _backend.SelectedServer is null ? "No server selected" : $"Selected: {_backend.SelectedServer.Name}";
         ActiveServerFooterText.Text = _backend.SelectedServer is null ? "Selected Server: None" : $"Selected Server: {_backend.SelectedServer.Name}";
-        ServerVersionFooterText.Text = _backend.IsRunning && !ReferenceEquals(_backend.RunningServer, _backend.SelectedServer)
-            ? $"Running: {_backend.RunningServer?.Name}   •   Selected: {_backend.SelectedServer?.Name}"
+        ServerVersionFooterText.Text = runningCount > 0
+            ? $"{SelectedServerSummary()}   •   {runningCount} of {_backend.Servers.Count} servers running"
             : SelectedServerSummary();
 
         if (_toolbarButtons.TryGetValue("Start", out var start)) start.IsEnabled = _backend.SelectedServer is not null && !_backend.IsRunning;
@@ -905,7 +960,7 @@ public partial class PrototypeWindow : Window
     private string RunningStateText()
     {
         if (_backend is null || !_backend.IsRunning) return "STOPPED";
-        return _backend.IsRecoveredProcess ? "RECOVERED / LIMITED CONTROL" : $"RUNNING — {_backend.RunningServer?.Name}";
+        return _backend.IsRecoveredProcess ? "RECOVERED / LIMITED CONTROL" : "RUNNING";
     }
 
     private bool TrySelected(out ServerProfile profile, out UIElement unavailable)
