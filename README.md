@@ -71,10 +71,12 @@ src/ASimpleMinecraftServer/
   Services/                   Downloads, version lookup, Java detection, health checks
   Models/                     Data types (ServerProfile, BackupRecord, and so on)
   Themes/                     WPF themes and styles
+  Assets/Icons/               MystCraft icon pack (64×64 PNG), mapped in PrototypeWindow.xaml.cs
   UI/                         Pages, dialogs, navigation
 docs/
   releases/                   Release notes for every version
   validation/                 Build and merge validation records
+  icons/                      Icon pack manifest and design spec
   RELEASE_CHECKLIST.md        Manual test checklist before a release
 ```
 

@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace ASimpleMinecraftServer;
@@ -27,18 +28,20 @@ public partial class PrototypeWindow : Window
         ["UI Preview"]="settings_top"
     };
 
-    private static readonly Dictionary<string, string> IconGlyphs = new(StringComparer.OrdinalIgnoreCase)
+    // Maps UI icon names to files in Assets/Icons (MystCraft icon pack, see docs/icons).
+    private static readonly Dictionary<string, string> IconFiles = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["dashboard"]="\uE80F", ["create"]="\uE710", ["console"]="\uE756", ["worlds"]="\uE774", ["world_card"]="\uE774",
-        ["players"]="\uE716", ["players_nav"]="\uE716", ["plugins_nav"]="\uEA86", ["plugin_card"]="\uEA86", ["manageplugins"]="\uEA86",
-        ["installplugins"]="\uE896", ["datapacks"]="\uE8B7", ["resourcepacks"]="\uE8B7", ["templates"]="\uE8F1", ["pluginpacks"]="\uE8B7",
-        ["migration"]="\uE8DE", ["performance"]="\uE9D2", ["health"]="\uE95E", ["loganalyzer"]="\uE9D9", ["startup"]="\uE7E8",
-        ["optimization"]="\uE945", ["scheduler_nav"]="\uE787", ["tasks"]="\uE787", ["autobackups"]="\uE74E", ["settings_nav"]="\uE713",
-        ["settings_top"]="\uE713", ["help"]="\uE897", ["about"]="\uE946", ["start"]="\uE768", ["stop"]="\uE71A", ["restart"]="\uE72C",
-        ["kill"]="\uE711", ["backup"]="\uE74E", ["createbackup"]="\uE74E", ["filemanager"]="\uE8B7", ["server"]="\uE7F8", ["serverinfo"]="\uE946",
-        ["page_server"]="\uE7F8", ["openconsole"]="\uE756", ["createworld"]="\uE710", ["tps"]="\uE9D2", ["cpu"]="\uE950", ["memory"]="\uE950",
-        ["disk"]="\uEDA2", ["mspt"]="\uE823", ["clock"]="\uE823", ["signal"]="\uE704", ["log"]="\uE8A5", ["edit"]="\uE70F", ["viewall"]="\uE8A7"
+        ["dashboard"]="dashboard", ["create"]="installer", ["console"]="console", ["worlds"]="worlds", ["world_card"]="worlds",
+        ["players"]="players", ["players_nav"]="players", ["plugins_nav"]="plugins", ["plugin_card"]="plugins", ["manageplugins"]="plugins",
+        ["installplugins"]="install_plugin", ["datapacks"]="datapacks", ["resourcepacks"]="resourcepacks", ["templates"]="workshop", ["pluginpacks"]="modpack",
+        ["migration"]="portal", ["performance"]="performance", ["health"]="health", ["loganalyzer"]="search_logs", ["startup"]="boot",
+        ["optimization"]="speed", ["scheduler_nav"]="scheduler", ["tasks"]="tasks", ["autobackups"]="schedule_backup", ["settings_nav"]="settings",
+        ["settings_top"]="settings", ["help"]="help", ["about"]="about", ["start"]="start", ["stop"]="stop", ["restart"]="restart",
+        ["kill"]="force_stop", ["backup"]="backup", ["createbackup"]="backup", ["filemanager"]="files", ["server"]="server", ["serverinfo"]="info",
+        ["page_server"]="server", ["openconsole"]="terminal", ["createworld"]="new_world", ["tps"]="tps", ["cpu"]="cpu", ["memory"]="ram",
+        ["disk"]="disk", ["mspt"]="mspt", ["clock"]="time", ["signal"]="network", ["log"]="logs", ["edit"]="edit", ["viewall"]="search"
     };
+    private static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
     private NativeBackendController? _backend;
     private readonly Dictionary<string, Button> _toolbarButtons = new(StringComparer.OrdinalIgnoreCase);
@@ -220,7 +223,7 @@ public partial class PrototypeWindow : Window
         _currentPage = page;
         PageTitle.Text = page;
         PageSubtitle.Text = SubtitleFor(page);
-        PageIcon.Text = GlyphFor(_icons.TryGetValue(page, out var icon) ? icon : "server");
+        PageIcon.Source = IconSource(_icons.TryGetValue(page, out var icon) ? icon : "server");
         UpdateNavigationSelection(page);
 
         try
@@ -341,7 +344,7 @@ public partial class PrototypeWindow : Window
     private UIElement BuildAllServersCard()
     {
         var card = Card(); card.Padding = new Thickness(12); card.Margin = new Thickness(0, 8, 0, 0);
-        var stack = new StackPanel(); stack.Children.Add(TitleRow("worlds", "All Servers"));
+        var stack = new StackPanel(); stack.Children.Add(TitleRow("server", "All Servers"));
         if (_backend is null || _backend.Servers.Count == 0)
         {
             stack.Children.Add(Muted("No servers yet. Use Create Server to add one."));
@@ -1093,11 +1096,25 @@ public partial class PrototypeWindow : Window
 
     private FrameworkElement CreateIcon(string name, double size, Thickness? margin = null)
     {
-        var icon = new TextBlock { Text = GlyphFor(name), FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = size, Width = size + 4, Height = size + 4, Margin = margin ?? new Thickness(0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Center, LineHeight = size + 4, SnapsToDevicePixels = true, UseLayoutRounding = true };
-        icon.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrightBrush"); return icon;
+        var icon = new Image { Source = IconSource(name), Width = size + 4, Height = size + 4, Margin = margin ?? new Thickness(0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, SnapsToDevicePixels = true, UseLayoutRounding = true };
+        RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
+        return icon;
     }
 
-    private static string GlyphFor(string name) => IconGlyphs.TryGetValue(name, out var glyph) ? glyph : "\uE10C";
+    /// <summary>Loads (once) the icon image for a UI icon name. Unknown names fall back to the server icon.</summary>
+    private static BitmapImage IconSource(string name)
+    {
+        var file = IconFiles.TryGetValue(name, out var mapped) ? mapped : "server";
+        if (IconCache.TryGetValue(file, out var cached)) return cached;
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.UriSource = new Uri($"pack://application:,,,/Assets/Icons/{file}.png", UriKind.Absolute);
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.EndInit();
+        image.Freeze();
+        IconCache[file] = image;
+        return image;
+    }
 
     private Button ActionButton(string text, RoutedEventHandler handler, string style = "SmallButton")
     {

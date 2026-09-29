@@ -17,10 +17,10 @@
                 <DockPanel Grid.Column="0" Margin="6">
                 <StackPanel DockPanel.Dock="Top">
                     <Button Style="{StaticResource NavButton}" Click="Nav_Click" Tag="Dashboard" Background="{DynamicResource ButtonHoverBrush}">
-                        <StackPanel Orientation="Horizontal"><Image x:Name="DashboardNavIcon" Source="Assets/MockupIcons_36/dashboard.png" Width="36" Height="36" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="NearestNeighbor"/><TextBlock x:Name="DashboardNavText" Text="Dashboard" VerticalAlignment="Center" FontWeight="SemiBold"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><Image x:Name="DashboardNavIcon" Source="Assets/Icons/dashboard.png" Width="36" Height="36" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/><TextBlock x:Name="DashboardNavText" Text="Dashboard" VerticalAlignment="Center" FontWeight="SemiBold"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Click="Nav_Click" Tag="Create Server"><StackPanel Orientation="Horizontal"><Image x:Name="CreateNavIcon" Source="Assets/MockupIcons_36/create.png" Width="36" Height="36" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="NearestNeighbor"/><TextBlock x:Name="CreateNavText" Text="Create Server" VerticalAlignment="Center"/></StackPanel></Button>
-                    <Button Style="{StaticResource NavButton}" Click="Nav_Click" Tag="Console"><StackPanel Orientation="Horizontal"><Image x:Name="ConsoleNavIcon" Source="Assets/MockupIcons_36/console.png" Width="36" Height="36" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="NearestNeighbor"/><TextBlock x:Name="ConsoleNavText" Text="Console" VerticalAlignment="Center"/></StackPanel></Button>
+                    <Button Style="{StaticResource NavButton}" Click="Nav_Click" Tag="Create Server"><StackPanel Orientation="Horizontal"><Image x:Name="CreateNavIcon" Source="Assets/Icons/installer.png" Width="36" Height="36" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/><TextBlock x:Name="CreateNavText" Text="Create Server" VerticalAlignment="Center"/></StackPanel></Button>
+                    <Button Style="{StaticResource NavButton}" Click="Nav_Click" Tag="Console"><StackPanel Orientation="Horizontal"><Image x:Name="ConsoleNavIcon" Source="Assets/Icons/console.png" Width="36" Height="36" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/><TextBlock x:Name="ConsoleNavText" Text="Console" VerticalAlignment="Center"/></StackPanel></Button>
                 </StackPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="NavHost" Margin="0,5,0,0"/>
@@ -52,14 +52,14 @@
                 <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10,6" Margin="6,0,0,0">
                     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
                         <StackPanel><TextBlock Text="SERVER STATUS" FontSize="8" FontWeight="SemiBold"/><TextBlock x:Name="ServerStatusText" Text="Ready" Foreground="{DynamicResource AccentBrightBrush}" FontWeight="SemiBold"/><TextBlock x:Name="ServerDetailText" Text="Functional backend connected" FontSize="8" Foreground="{DynamicResource MutedTextBrush}"/></StackPanel>
-                        <Image Grid.Column="1" Source="Assets/MockupIcons/signal.png" Width="25" Height="25" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        <Image Grid.Column="1" Source="Assets/Icons/network.png" Width="25" Height="25" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Grid>
                 </Border>
             </Grid>
 
             <Border Grid.Row="1" Style="{StaticResource Card}" Background="{DynamicResource HeaderBrush}" Padding="10,5" Margin="0,0,0,7">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="PageIcon" Text="&#xE80F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="30" Width="34" Height="34" Margin="0,0,9,0" Foreground="{DynamicResource AccentBrightBrush}" TextAlignment="Center" VerticalAlignment="Center"/>
+                    <Image x:Name="PageIcon" Source="Assets/Icons/dashboard.png" Width="34" Height="34" Margin="0,0,9,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <StackPanel Grid.Column="1"><TextBlock x:Name="PageTitle" Text="Dashboard" FontSize="20" FontWeight="SemiBold"/><TextBlock x:Name="PageSubtitle" Text="Overview of your Minecraft server" FontSize="9" Foreground="{DynamicResource MutedTextBrush}"/></StackPanel>
                     <ComboBox x:Name="ServerPicker" Grid.Column="2" VerticalAlignment="Center" DisplayMemberPath="PickerLabel" SelectionChanged="ServerPicker_SelectionChanged" ToolTip="Select the active Minecraft server"/>
                 </Grid>

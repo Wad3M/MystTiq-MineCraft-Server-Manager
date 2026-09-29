@@ -1,0 +1,262 @@
+MystCraft Icon Pack v1.0 – Master Design Specification
+Global Style Guide
+Every icon in this library must follow these rules:
+•	Resolution: 512×512 pixels
+•	Format: PNG
+•	Background: Transparent
+•	Perspective: ~25° isometric
+•	Lighting: Top-left
+•	Shadow: Soft realistic shadow beneath object
+•	Padding: ~12%
+•	Style: Semi-realistic Minecraft voxel art
+•	Text: None
+•	Borders: None
+•	Scale: Consistent across all icons
+•	Color Palette: Authentic Minecraft materials and colors
+Whenever possible, icons should be based on real Minecraft blocks, items, mobs, entities, or mechanics, rather than generic computer symbols.
+________________________________________
+001–010 Dashboard
+File	Minecraft Concept	Purpose
+001_dashboard.png	Compass	Dashboard / Home
+002_server.png	Beacon	Server
+003_status.png	Redstone Lamp	Status
+004_online.png	Lit Beacon	Online
+005_offline.png	Unlit Redstone Lamp	Offline
+006_loading.png	Clock	Loading
+007_health.png	Golden Apple	Health
+008_statistics.png	Filled Map	Statistics
+009_activity.png	Observer	Activity
+010_notifications.png	Bell	Notifications
+________________________________________
+011–020 Server Controls
+File	Minecraft Concept	Purpose
+011_start.png	Lit Redstone Torch	Start
+012_stop.png	Lever (Off)	Stop
+013_restart.png	Redstone Repeater	Restart
+014_force_stop.png	Iron Axe cutting Redstone	Force Stop
+015_pause.png	Dim Redstone Torch	Pause
+016_resume.png	Lever (On)	Resume
+017_shutdown.png	Extinguished Campfire	Shutdown
+018_power.png	Lightning Rod	Power
+019_boot.png	Extending Piston	Boot
+020_safe_mode.png	Shield surrounding Beacon	Safe Mode
+________________________________________
+021–030 Installation
+File	Minecraft Concept	Purpose
+021_install.png	Anvil	Install
+022_reinstall.png	Anvil + Circular Arrow	Reinstall
+023_update.png	Netherite Upgrade Template	Update
+024_download.png	Chest + Down Arrow	Download
+025_verify.png	Spyglass	Verify
+026_repair.png	Anvil + Iron Ingot	Repair
+027_java.png	Minecraft Coffee Mug	Java
+028_java_version.png	Enchanted Coffee Mug	Java Version
+029_installer.png	Crafting Table	Installer
+030_launcher.png	Minecart Launcher	Launcher
+________________________________________
+031–050 Worlds
+File	Minecraft Concept	Purpose
+031_world.png	Grass Block	World
+032_worlds.png	Three Grass Blocks	Worlds
+033_new_world.png	Grass Block + Emerald	New World
+034_import_world.png	Nether Portal	Import
+035_export_world.png	End Portal	Export
+036_delete_world.png	TNT	Delete World
+037_duplicate_world.png	Two Grass Blocks	Duplicate
+038_seed.png	Wheat Seeds	Seed
+039_spawn.png	Respawn Anchor	Spawn
+040_world_settings.png	Grass Block + Enchanted Book	World Settings
+041_overworld.png	Grass Block Landscape	Overworld
+042_nether.png	Netherrack	Nether
+043_the_end.png	End Stone	The End
+044_chunk.png	Chunk Section	Chunk
+045_region.png	Map Grid	Region
+046_biome.png	Tree + Grass	Biome
+047_map.png	Explorer Map	Map
+048_waypoint.png	Banner	Waypoint
+049_portal.png	Nether Portal Frame	Portal
+050_dimension.png	End Gateway	Dimension
+________________________________________
+051–070 Players
+File	Minecraft Concept	Purpose
+051_players.png	Steve & Alex	Players
+052_player.png	Steve Head	Player
+053_join.png	Green Door	Join
+054_leave.png	Open Door	Leave
+055_kick.png	Iron Boot	Kick
+056_ban.png	Iron Bars	Ban
+057_unban.png	Broken Iron Bars	Unban
+058_mute.png	Note Block Muted	Mute
+059_unmute.png	Note Block	Unmute
+060_inventory.png	Chest Inventory	Inventory
+061_playerdata.png	Player Head + Book	Player Data
+062_advancements.png	Advancement Toast	Advancements
+063_statistics_player.png	Player + Filled Map	Statistics
+064_deaths.png	Totem Broken	Deaths
+065_permissions.png	Key	Permissions
+066_operators.png	Diamond Sword	Operators
+067_whitelist.png	White Banner	Whitelist
+068_blacklist.png	Black Banner	Blacklist
+069_groups.png	Three Player Heads	Groups
+070_profile.png	Player Head + Book	Profile
+________________________________________
+071–080 Console
+File	Minecraft Concept	Purpose
+071_console.png	Command Block	Console
+072_terminal.png	Command Block + Cursor	Terminal
+073_command.png	Command Block	Command
+074_logs.png	Book & Quill	Logs
+075_live_logs.png	Glowing Book	Live Logs
+076_search_logs.png	Spyglass + Book	Search Logs
+077_clear_logs.png	Lava Bucket	Clear Logs
+078_export_logs.png	Book + End Portal	Export Logs
+079_history.png	Written Book	History
+080_debug.png	Debug Stick	Debug
+________________________________________
+081–090 Backups
+File	Minecraft Concept	Purpose
+081_backup.png	Chest	Backup
+082_restore.png	Ender Chest	Restore
+083_snapshot.png	Camera Map	Snapshot
+084_archive.png	Barrel	Archive
+085_cloud_backup.png	Cloud over Ender Chest	Cloud Backup
+086_schedule_backup.png	Clock + Chest	Scheduled Backup
+087_compress.png	Piston Compressing Chest	Compress
+088_extract.png	Open Barrel	Extract
+089_history_backup.png	Book + Chest	Backup History
+090_recovery.png	Totem of Undying	Recovery
+________________________________________
+091–110 Performance
+File	Minecraft Concept	Purpose
+091_cpu.png	Redstone Comparator	CPU
+092_ram.png	Redstone Dust Cluster	RAM
+093_disk.png	Shulker Box	Disk
+094_storage.png	Double Chest	Storage
+095_ssd.png	Iron Block + Redstone	SSD
+096_network.png	Ender Pearl	Network
+097_bandwidth.png	Flowing Redstone	Bandwidth
+098_ping.png	Sculk Sensor	Ping
+099_tps.png	Clock	TPS
+100_mspt.png	Comparator + Clock	MSPT
+101_graph.png	Map Graph	Graph
+102_chart.png	Chart on Map	Chart
+103_performance.png	Beacon	Performance
+104_monitor.png	Observer	Monitor
+105_usage.png	Furnace Meter	Usage
+106_speed.png	Sugar	Speed
+107_latency.png	Tripwire Hook	Latency
+108_database.png	Bookshelf	Database
+109_memory.png	Bookshelf + Comparator	Memory
+110_resources.png	Resource Bundle	Resources
+________________________________________
+111–130 Configuration
+File	Minecraft Concept	Purpose
+111_settings.png	Enchanted Book	Settings
+112_config.png	Writable Book	Config
+113_properties.png	Book + Gear	Properties
+114_gamerules.png	Command Block + Book	Game Rules
+115_difficulty.png	Iron Sword	Difficulty
+116_gamemode.png	Armor Stand	Game Mode
+117_weather.png	Weather Cloud	Weather
+118_time.png	Clock	Time
+119_pvp.png	Crossed Swords	PvP
+120_hardcore.png	Totem + Heart	Hardcore
+121_cheats.png	Command Block	Cheats
+122_spawn_protection.png	Shield + Respawn Anchor	Spawn Protection
+123_view_distance.png	Spyglass	View Distance
+124_simulation_distance.png	Observer	Simulation Distance
+125_autosave.png	Chest + Clock	Autosave
+126_autorestart.png	Repeater + Clock	Auto Restart
+127_scheduler.png	Clock	Scheduler
+128_calendar.png	Calendar Book	Calendar
+129_timer.png	Hourglass	Timer
+130_tasks.png	Hopper	Tasks
+________________________________________
+131–145 Server Software
+File	Minecraft Concept	Purpose
+131_vanilla.png	Vanilla Flower	Vanilla
+132_paper.png	Paper Sheet	Paper
+133_purpur.png	Purpur Block	Purpur
+134_spigot.png	Water Spout	Spigot
+135_bukkit.png	Bucket	Bukkit
+136_fabric.png	Loom	Fabric
+137_quilt.png	Wool Quilt Pattern	Quilt
+138_forge.png	Blast Furnace	Forge
+139_neoforge.png	Netherite Anvil	NeoForge
+140_folia.png	Oak Leaves	Folia
+141_velocity.png	Firework Rocket	Velocity
+142_bungeecord.png	Lead	BungeeCord
+143_waterfall.png	Waterfall	Waterfall
+144_sponge.png	Sponge Block	Sponge
+145_proxy.png	Nether Portal	Proxy
+________________________________________
+146–160 Mods & Plugins
+File	Minecraft Concept	Purpose
+146_mods.png	Smithing Table	Mods
+147_plugins.png	Crafting Table	Plugins
+148_install_plugin.png	Crafting Table + Emerald	Install Plugin
+149_remove_plugin.png	Broken Crafting Table	Remove Plugin
+150_enable_plugin.png	Green Redstone Torch + Crafting Table	Enable
+151_disable_plugin.png	Lever Off + Crafting Table	Disable
+152_update_plugin.png	Crafting Table + Arrow	Update
+153_modpack.png	Bundle	Modpack
+154_datapacks.png	Book Bundle	Datapacks
+155_resourcepacks.png	Bundle	Resource Packs
+156_shaderpacks.png	Amethyst Crystal	Shader Packs
+157_dependencies.png	Chain	Dependencies
+158_compatibility.png	Puzzle Pieces	Compatibility
+159_marketplace.png	Villager Stall	Marketplace
+160_workshop.png	Smithing Table + Hammer	Workshop
+________________________________________
+161–175 File Manager
+File	Minecraft Concept	Purpose
+161_files.png	Shulker Box	Files
+162_folder.png	Barrel	Folder
+163_new_folder.png	Barrel + Emerald	New Folder
+164_upload.png	Barrel + Up Arrow	Upload
+165_download_file.png	Barrel + Down Arrow	Download
+166_copy.png	Two Books	Copy
+167_paste.png	Book + Arrow	Paste
+168_rename.png	Name Tag	Rename
+169_delete.png	Lava Bucket	Delete
+170_edit.png	Book & Quill	Edit
+171_save.png	Chest + Emerald	Save
+172_search.png	Spyglass	Search
+173_refresh.png	Circular Arrows	Refresh
+174_hidden_files.png	Invisible Item Frame	Hidden Files
+175_permissions_file.png	Key + Book	File Permissions
+________________________________________
+176–185 Security
+File	Minecraft Concept	Purpose
+176_security.png	Shield	Security
+177_lock.png	Locked Chest	Lock
+178_unlock.png	Open Lock	Unlock
+179_password.png	Tripwire Hook Key	Password
+180_encryption.png	Enchanted Book	Encryption
+181_firewall.png	Fire Charge	Firewall
+182_shield.png	Shield	Shield
+183_admin.png	Crown	Admin
+184_warning.png	Bell + Exclamation	Warning
+185_alert.png	Redstone Lamp Flashing	Alert
+________________________________________
+186–195 Networking
+File	Minecraft Concept	Purpose
+186_ip.png	Compass + Globe	IP Address
+187_port.png	Nether Portal	Port
+188_dns.png	Bookshelf + Compass	DNS
+189_domain.png	Map Marker	Domain
+190_connection.png	Chain Link	Connection
+191_upload_speed.png	Rocket Up	Upload Speed
+192_download_speed.png	Water Stream Down	Download Speed
+193_cloud.png	Cloud	Cloud
+194_remote_access.png	Ender Pearl	Remote Access
+195_lan.png	Redstone Wire Network	LAN
+________________________________________
+196–200 Utilities
+File	Minecraft Concept	Purpose
+196_help.png	Knowledge Book	Help
+197_info.png	Book	Information
+198_about.png	Lectern	About
+199_theme.png	Painting Palette	Theme
+200_darkmode.png	Moon over Deep Slate	Dark Mode
+
