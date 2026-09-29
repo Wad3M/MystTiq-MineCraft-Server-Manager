@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Manual run from the Actions tab: releases the version in the .csproj
+  # from the selected branch and creates its vX.Y.Z tag.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,7 +16,6 @@ jobs:
     runs-on: windows-latest
     env:
       PROJECT: src/ASimpleMinecraftServer/ASimpleMinecraftServer.csproj
-      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v7
 
@@ -21,13 +23,15 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Check tag matches project version
+      - name: Determine version
         shell: pwsh
         run: |
           $version = ([xml](Get-Content $env:PROJECT)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match project version $version." }
-          $notes = "docs/releases/RELEASE_NOTES_$env:TAG.md"
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) { throw "Tag $env:GITHUB_REF_NAME does not match project version $version." }
+          $notes = "docs/releases/RELEASE_NOTES_$tag.md"
           if (-not (Test-Path $notes)) { throw "Release notes not found: $notes" }
+          "TAG=$tag" | Out-File -Append $env:GITHUB_ENV
           "NOTES=$notes" | Out-File -Append $env:GITHUB_ENV
 
       - name: Publish Windows x64
@@ -51,6 +55,7 @@ jobs:
         run: |
           gh release create $env:TAG (Get-ChildItem dist).FullName `
             --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
             --title "MystTiq Minecraft Server Manager $env:TAG" `
             --notes-file $env:NOTES `
             --prerelease
