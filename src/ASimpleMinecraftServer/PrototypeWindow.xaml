@@ -1,7 +1,7 @@
 <Window x:Class="ASimpleMinecraftServer.PrototypeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MystMC v2.2.0"
+        Title="MystMC"
         Width="1440" Height="900" MinWidth="1080" MinHeight="700"
         WindowStartupLocation="CenterScreen" WindowState="Maximized"
         Background="{DynamicResource AppBackground}" Foreground="{DynamicResource TextBrush}"
@@ -74,7 +74,7 @@
             <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                 <TextBlock x:Name="ActiveServerFooterText" VerticalAlignment="Center" Text="Active Server: No server selected" Foreground="{DynamicResource AccentBrightBrush}" FontSize="10"/>
                 <TextBlock x:Name="ServerVersionFooterText" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Text="Server details unavailable" Foreground="{DynamicResource MutedTextBrush}" FontSize="10"/>
-                <TextBlock x:Name="PrototypeStatus" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Text="MystMC v2.2.0 — Ready" FontSize="10"/>
+                <TextBlock x:Name="PrototypeStatus" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Text="MystMC — Ready" FontSize="10"/>
             </Grid>
         </Border>
     </Grid>

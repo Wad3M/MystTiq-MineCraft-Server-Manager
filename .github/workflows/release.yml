@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      PROJECT: src/ASimpleMinecraftServer/ASimpleMinecraftServer.csproj
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check tag matches project version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content $env:PROJECT)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match project version $version." }
+          $notes = "docs/releases/RELEASE_NOTES_$env:TAG.md"
+          if (-not (Test-Path $notes)) { throw "Release notes not found: $notes" }
+          "NOTES=$notes" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Publish Windows x64
+        run: dotnet publish ${{ env.PROJECT }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -warnaserror -o publish
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Get-ChildItem publish | Format-Table Name, Length
+          New-Item -ItemType Directory dist | Out-Null
+          $exe = "MystTiq-MineCraft-Server-Manager-$env:TAG-win-x64.exe"
+          Copy-Item publish/ASimpleMinecraftServer.exe "dist/$exe"
+          $hash = (Get-FileHash "dist/$exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $exe" | Out-File -Encoding ascii dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:TAG (Get-ChildItem dist).FullName `
+            --repo $env:GITHUB_REPOSITORY `
+            --title "MystTiq Minecraft Server Manager $env:TAG" `
+            --notes-file $env:NOTES `
+            --prerelease

@@ -1,10 +1,10 @@
-# MystMC
+# MystTiq Minecraft Server Manager
 
-A simple Windows app for creating and running Minecraft servers.
+A simple Windows app for creating and running Minecraft servers. The app window is titled **MystMC**.
 
-Pick a server type and version, give it a name, and MystMC downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
+Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v2.2.0 adds multi-server support. This is new, so please report anything odd.
+> **Status:** v0.2.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
@@ -16,40 +16,41 @@ Pick a server type and version, give it a name, and MystMC downloads it, sets it
 - **Plugins and datapacks.** Install from Modrinth or from a file, then enable, disable, or remove them.
 - **Worlds and players.** Import, rename, and archive worlds. Op, kick, or ban players.
 - **Diagnostics.** Health, log, startup, and performance checks. They only read files and never change a server unless you tell them to.
+- **Minecraft-style icons.** The UI uses the MystCraft icon pack.
 
-## Requirements
+## Download
 
-- Windows 10 or 11 (x64)
-- [.NET 10 SDK](https://dotnet.microsoft.com/download), needed only to build from source
-- Java installed and on `PATH`, or set per server. Newer Minecraft versions need Java 21.
+Get the latest `.exe` from the [Releases page](https://github.com/Wad3M/MystTiq-MineCraft-Server-Manager/releases). It is a single self-contained file, so you don't need to install .NET to run it.
 
-## Quick start
+Windows may show "Windows protected your PC" because the file isn't code-signed. Click **More info → Run anyway**.
 
-```bat
-Build-And-Run.bat
-```
+To start Minecraft servers you also need **Java 21** (for example from [Adoptium](https://adoptium.net)).
 
-This restores, builds, and launches the app in Release mode.
+## Build from source
 
-To build a single self-contained `.exe`:
+You need Windows 10 or 11 (x64) and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
-```bat
-Publish-Windows.bat
-```
+1. Get the code, either with **Code → Download ZIP** on GitHub or with:
+   ```bat
+   git clone https://github.com/Wad3M/MystTiq-MineCraft-Server-Manager.git
+   ```
+2. Open the project folder in File Explorer and double-click **`Build-And-Run.bat`**. It restores packages, builds, and launches the app. The first run takes a minute while dependencies download.
 
-The output is in `src\ASimpleMinecraftServer\bin\Release\net10.0-windows\win-x64\publish\`.
+To build the single `.exe` yourself, run `Publish-Windows.bat`. The output is in `src\ASimpleMinecraftServer\bin\Release\net10.0-windows\win-x64\publish\`.
+
+If the build fails, run `dotnet --version` in a command prompt. It should print a version starting with `10.`.
 
 ## Running more than one server
 
 1. Create or add each server.
-2. Give each one its own `server-port` in its settings (for example `25565`, `25566`, `25567`). MystMC refuses to start a server whose port is already in use.
+2. Give each one its own `server-port` in its settings (for example `25565`, `25566`, `25567`). The app refuses to start a server whose port is already in use.
 3. Start them from the **All Servers** card on the Dashboard, or select one in the server picker and press **Start**.
 
 The server picker at the top chooses which server the toolbar, Console, Players, and Performance pages control. Running servers show a `●` next to their name.
 
 Keep an eye on memory. Each server reserves the RAM set in its profile, so three 4 GB servers need at least 12 GB free.
 
-When you close MystMC it offers to stop every running server safely first.
+When you close the app it offers to stop every running server safely first.
 
 ## Where things are stored
 
@@ -60,6 +61,8 @@ When you close MystMC it offers to stop every running server safely first.
 | Server files | The install folder you pick, one subfolder per server |
 | Backups | `C:\GameServers\_Backups`, or `%APPDATA%\ASimpleMinecraftServer\Backups` if that folder can't be created |
 | Startup errors | `MystMC_startup.log` next to the executable |
+
+`ASimpleMinecraftServer` is the project's original internal name. It is kept for these folders so existing server lists carry over.
 
 ## Project layout
 
@@ -74,13 +77,20 @@ src/ASimpleMinecraftServer/
   Assets/Icons/               MystCraft icon pack (64×64 PNG), mapped in PrototypeWindow.xaml.cs
   UI/                         Pages, dialogs, navigation
 docs/
-  releases/                   Release notes for every version
-  validation/                 Build and merge validation records
+  releases/                   Release notes
   icons/                      Icon pack manifest and design spec
+  validation/                 Build and merge validation records from earlier versions
+  RELEASING.md                How to publish a new release
   RELEASE_CHECKLIST.md        Manual test checklist before a release
 ```
 
 `MainWindow.xaml*` is the old v1 window. It is kept for reference and excluded from the build.
+
+## Versioning
+
+The project restarted its version numbers at **0.2.0** when it moved to this repository. Earlier builds were numbered 1.x and 2.x (up to 2.2.0) under the names "A Simple Minecraft Server" and "MystMC". Their notes are kept in [`docs/releases/`](docs/releases/).
+
+The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimpleMinecraftServer.csproj`. The window title and About page read it from there.
 
 ## Roadmap
 
@@ -90,4 +100,4 @@ docs/
 
 ## Release notes
 
-See [`docs/releases/`](docs/releases/). The latest is [v2.2.0](docs/releases/RELEASE_NOTES_v2.2.0.md).
+The latest is [v0.2.0](docs/releases/RELEASE_NOTES_v0.2.0.md). See [`docs/releases/`](docs/releases/) for all versions.

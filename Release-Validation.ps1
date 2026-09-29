@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $project = Join-Path $PSScriptRoot 'src\ASimpleMinecraftServer\ASimpleMinecraftServer.csproj'
 
-Write-Host '=== A Simple Minecraft Server v1.1.1 Release Validation ===' -ForegroundColor Cyan
+Write-Host '=== MystTiq Minecraft Server Manager Release Validation ===' -ForegroundColor Cyan
 Write-Host 'Cleaning...'
 dotnet clean $project -c Release
 Write-Host 'Restoring...'

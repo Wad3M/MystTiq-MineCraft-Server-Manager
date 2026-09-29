@@ -58,13 +58,21 @@ public partial class PrototypeWindow : Window
     private DateTimeOffset _lastMaintenanceCheck = DateTimeOffset.MinValue;
     private bool _maintenanceBusy;
 
-    public PrototypeWindow() => InitializeComponent();
+    /// <summary>App version from the project file (the Version property in the .csproj), e.g. "0.2.0".</summary>
+    private static readonly string AppVersion = typeof(PrototypeWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    public PrototypeWindow()
+    {
+        InitializeComponent();
+        Title = $"MystMC v{AppVersion}";
+        PrototypeStatus.Text = $"MystMC v{AppVersion} — Ready";
+    }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         try
         {
-            App.WriteStartupLog("MystMC v2.2.0 shell loaded; initializing native backend services.");
+            App.WriteStartupLog($"MystMC v{AppVersion} shell loaded; initializing native backend services.");
             BuildToolbar();
             BuildNavigation();
             RestoreTheme();
@@ -254,7 +262,7 @@ public partial class PrototypeWindow : Window
                 "UI Preview" => BuildPreviewPage(),
                 _ => MessagePage(page, "This page is not available.")
             };
-            PrototypeStatus.Text = $"MystMC v2.2.0 — {page}";
+            PrototypeStatus.Text = $"MystMC v{AppVersion} — {page}";
         }
         catch (Exception ex)
         {
@@ -816,7 +824,7 @@ public partial class PrototypeWindow : Window
 
     private UIElement BuildAboutPage()
     {
-        return MessagePage("MystMC v2.2.0", "Native Backend Integration\n\nThe v1.8.8 polished UI shell now talks directly to server services. No hidden legacy MainWindow is created.\n\nBackend lineage: A Simple Minecraft Server v1.5.9 Stabilization Build2.");
+        return MessagePage($"MystMC v{AppVersion}", "MystTiq Minecraft Server Manager\n\nA simple Windows app for creating and running several Minecraft servers side by side.\n\nSource and release notes: https://github.com/Wad3M/MystTiq-MineCraft-Server-Manager");
     }
 
     private UIElement BuildPreviewPage()
