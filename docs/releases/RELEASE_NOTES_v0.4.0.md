@@ -1,6 +1,16 @@
 # MystTiq Minecraft Server Manager v0.4.0
 
-## A simpler sidebar
+This release includes 0.3.0, which wasn't published separately. Its notes are in [RELEASE_NOTES_v0.3.0.md](https://github.com/Wad3M/MystTiq-MineCraft-Server-Manager/blob/main/docs/releases/RELEASE_NOTES_v0.3.0.md).
+
+## New in 0.3.0: Add-ons for plugins and mods
+- The **Add-ons** page manages plugins on Paper, Purpur and Folia servers and mods on Fabric servers.
+- **Search Modrinth** in the app. Only server-side add-ons for your server's loader and Minecraft version are shown.
+- **One-click install** of the newest compatible build, checked against Modrinth's SHA-512 hash.
+- **One-click Fabric API** on Fabric servers that don't have it yet.
+- **Wrong-type protection:** plugins can't go on Fabric, mods can't go on Paper, and client-only mods are refused.
+- **Settings** can now edit the server type and Minecraft version, so servers added from an existing folder work with Add-ons.
+
+## New in 0.4.0: A simpler sidebar
 The sidebar goes from 22 pages to 10. Related tools are now tabs on one page, and each page remembers the tab you last used.
 
 | Page | What's on it |
