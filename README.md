@@ -4,11 +4,11 @@ A simple Windows app for creating and running Minecraft servers. The app window 
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.2.0, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.2.1, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
-- **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, or Fabric, or uses your own JAR. It accepts the EULA and writes a starting `server.properties` for you.
+- **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, or Fabric (checked against the provider's published checksum), or uses your own JAR. It picks a free port and writes a starting `server.properties` for you.
 - **Run several servers at once.** Each server has its own folder, version, memory limit, Java path, console, and player list. The dashboard shows them all with Start/Stop buttons.
 - **Port conflict check.** A server won't start if its port is already taken.
 - **Start, stop, restart, and a live console.** Graceful stop, with a warning before any force kill.
@@ -43,7 +43,7 @@ If the build fails, run `dotnet --version` in a command prompt. It should print 
 ## Running more than one server
 
 1. Create or add each server.
-2. Give each one its own `server-port` in its settings (for example `25565`, `25566`, `25567`). The app refuses to start a server whose port is already in use.
+2. Each server needs its own port. Create Server fills in the next free one (25565, 25566, …). For servers you add from an existing folder, set `server-port` in its settings. The app refuses to start a server whose port is already in use.
 3. Start them from the **All Servers** card on the Dashboard, or select one in the server picker and press **Start**.
 
 The server picker at the top chooses which server the toolbar, Console, Players, and Performance pages control. Running servers show a `●` next to their name.
@@ -100,4 +100,4 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 ## Release notes
 
-The latest is [v0.2.0](docs/releases/RELEASE_NOTES_v0.2.0.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.2.1](docs/releases/RELEASE_NOTES_v0.2.1.md). See [`docs/releases/`](docs/releases/) for all versions.

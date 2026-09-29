@@ -3,6 +3,7 @@ using ASimpleMinecraftServer.Services;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Net.NetworkInformation;
 
 namespace ASimpleMinecraftServer.Core;
@@ -129,6 +130,8 @@ public sealed class NativeBackendController : IDisposable
         string version,
         int memoryGb,
         string javaPath,
+        int port,
+        bool eulaAccepted,
         string? customJarPath = null,
         CancellationToken cancellationToken = default)
     {
@@ -138,6 +141,9 @@ public sealed class NativeBackendController : IDisposable
             throw new InvalidOperationException("A MystMC server profile with this name already exists.");
         if (Servers.Any(server => PathsEqual(server.Folder, folder)))
             throw new InvalidOperationException("A MystMC server profile already uses this folder.");
+        var portOwner = Servers.FirstOrDefault(server => server.Port == port);
+        if (portOwner is not null)
+            throw new InvalidOperationException($"Port {port} is already used by '{portOwner.Name}'. Try port {SuggestFreePort()}.");
         if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
             throw new InvalidOperationException("The generated server folder already exists and is not empty. Choose a different server name/install root, or use Add Existing Server.");
 
@@ -147,7 +153,9 @@ public sealed class NativeBackendController : IDisposable
             string.IsNullOrWhiteSpace(type) ? "Vanilla" : type.Trim(),
             version?.Trim() ?? string.Empty,
             Math.Max(1, memoryGb),
-            customJarPath);
+            customJarPath,
+            eulaAccepted,
+            port);
 
         var profile = await _serverInstaller.InstallAsync(request, cancellationToken);
         profile.JavaPath = string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim();
@@ -157,6 +165,22 @@ public sealed class NativeBackendController : IDisposable
         SelectServer(profile);
         GetInstance(profile).AddConsole($"[Manager] Installed {profile.Type} {profile.Version} as '{profile.Name}' in {profile.Folder}.");
         return profile;
+    }
+
+    /// <summary>
+    /// The first port from 25565 upwards that no server profile uses and nothing on this machine is listening on.
+    /// </summary>
+    public int SuggestFreePort()
+    {
+        var used = Servers.Select(server => server.Port).ToHashSet();
+        try
+        {
+            foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners()) used.Add(endpoint.Port);
+        }
+        catch (NetworkInformationException) { }
+        var port = 25565;
+        while (used.Contains(port) && port < 65535) port++;
+        return port;
     }
 
     public ServerProfile AddExistingServer(string folder)
@@ -325,7 +349,9 @@ public sealed class NativeBackendController : IDisposable
     public Task<ServerHealthReport> AnalyzeHealthAsync(CancellationToken cancellationToken = default) =>
         _healthAnalyzer.AnalyzeAsync(RequireSelected(), BackupRoot, cancellationToken);
 
-    public async Task<IReadOnlyList<string>> InstallPluginPackAsync(PluginPack pack, CancellationToken cancellationToken = default)
+    public sealed record PluginPackResult(IReadOnlyList<string> Installed, IReadOnlyList<string> Skipped);
+
+    public async Task<PluginPackResult> InstallPluginPackAsync(PluginPack pack, CancellationToken cancellationToken = default)
     {
         var profile = RequireSelected();
         if (!profile.Type.Equals("Paper", StringComparison.OrdinalIgnoreCase)
@@ -336,15 +362,15 @@ public sealed class NativeBackendController : IDisposable
             throw new InvalidOperationException("Set the Minecraft version in the server profile before installing a plugin pack.");
 
         var installed = new List<string>();
+        var skipped = new List<string>();
         foreach (var projectId in PluginPacks.GetProjectIds(pack))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var results = await _pluginCatalog.SearchAsync(projectId, profile.Version, cancellationToken);
-            var item = results.FirstOrDefault(x => x.ProjectId.Equals(projectId, StringComparison.OrdinalIgnoreCase) || x.Slug.Equals(projectId, StringComparison.OrdinalIgnoreCase))
-                       ?? results.FirstOrDefault();
-            if (item is null) throw new InvalidOperationException($"Could not find '{projectId}' on Modrinth for Minecraft {profile.Version}.");
+            // Exact project lookup only: never install whatever a search happens to return.
+            var item = await _pluginCatalog.GetProjectAsync(projectId, cancellationToken);
+            if (item is null) { skipped.Add($"{projectId}: not found on Modrinth"); continue; }
             await _pluginCatalog.ResolveInstallAsync(item, profile.Version, cancellationToken);
-            if (!item.CanInstall || string.IsNullOrWhiteSpace(item.FileName)) throw new InvalidOperationException($"No compatible downloadable build was found for {item.Name}.");
+            if (!item.CanInstall || string.IsNullOrWhiteSpace(item.FileName)) { skipped.Add($"{item.Name}: no build for Minecraft {profile.Version}"); continue; }
             var temp = Path.Combine(Path.GetTempPath(), "MystMC-" + Guid.NewGuid().ToString("N") + ".jar");
             try
             {
@@ -352,10 +378,14 @@ public sealed class NativeBackendController : IDisposable
                 Plugins.InstallDownloaded(profile, temp, item.FileName, overwrite: true);
                 installed.Add(item.Name);
             }
+            catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or HttpRequestException)
+            {
+                skipped.Add($"{item.Name}: {ex.Message}");
+            }
             finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
         }
         StateChanged?.Invoke(this, EventArgs.Empty);
-        return installed;
+        return new PluginPackResult(installed, skipped);
     }
 
     public async Task RunDueMaintenanceAsync(CancellationToken cancellationToken = default)

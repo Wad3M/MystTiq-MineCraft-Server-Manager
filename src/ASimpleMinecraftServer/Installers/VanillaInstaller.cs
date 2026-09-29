@@ -8,7 +8,7 @@ public sealed class VanillaInstaller(DownloadService downloads, VersionManager v
 {
     public async Task InstallAsync(ServerInstallRequest request, CancellationToken cancellationToken = default)
     {
-        var url = await versions.ResolveDownloadUrlAsync("Vanilla", request.Version, cancellationToken);
-        await downloads.DownloadFileAsync(url, Path.Combine(request.Folder, "server.jar"), cancellationToken);
+        var download = await versions.ResolveDownloadAsync("Vanilla", request.Version, cancellationToken);
+        await downloads.DownloadVerifiedAsync(download, Path.Combine(request.Folder, "server.jar"), cancellationToken);
     }
 }

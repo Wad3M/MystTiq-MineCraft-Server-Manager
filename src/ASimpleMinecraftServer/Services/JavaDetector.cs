@@ -71,6 +71,7 @@ public static partial class JavaDetector
     public static int GetRequiredMajorVersion(string? minecraftVersion)
     {
         if (!Version.TryParse(NormalizeVersion(minecraftVersion), out var version)) return 21;
+        if (version.Major >= 26) return 25; // Year-based versions (26.1+) require Java 25.
         if (version >= new Version(1, 20, 5)) return 21;
         if (version >= new Version(1, 18)) return 17;
         if (version >= new Version(1, 17)) return 16;

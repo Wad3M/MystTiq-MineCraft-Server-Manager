@@ -3,6 +3,9 @@ using System.Text.RegularExpressions;
 
 namespace ASimpleMinecraftServer.Services;
 
+/// <summary>A server JAR download plus the checksum its provider publishes (null when the provider publishes none).</summary>
+public sealed record ServerDownload(string Url, string? HashAlgorithm, string? Hash);
+
 public sealed class VersionManager(DownloadService downloads)
 {
     public static readonly IReadOnlyList<string> SupportedServerTypes =
@@ -27,15 +30,16 @@ public sealed class VersionManager(DownloadService downloads)
             .ToList();
     }
 
-    public async Task<string> ResolveDownloadUrlAsync(string serverType, string version, CancellationToken cancellationToken = default)
+    public async Task<ServerDownload> ResolveDownloadAsync(string serverType, string version, CancellationToken cancellationToken = default)
     {
         return serverType switch
         {
             "Vanilla" => await ResolveVanillaAsync(version, cancellationToken),
             "Paper" => await ResolvePaperMcAsync("paper", version, cancellationToken),
             "Folia" => await ResolvePaperMcAsync("folia", version, cancellationToken),
-            "Purpur" => $"https://api.purpurmc.org/v2/purpur/{Uri.EscapeDataString(version)}/latest/download",
-            "Fabric" => await ResolveFabricAsync(version, cancellationToken),
+            "Purpur" => await ResolvePurpurAsync(version, cancellationToken),
+            // Fabric's meta API publishes no checksum for the server launcher; HTTPS is the only protection.
+            "Fabric" => new ServerDownload(await ResolveFabricAsync(version, cancellationToken), null, null),
             _ => throw new InvalidOperationException($"No automatic download provider exists for {serverType}.")
         };
     }
@@ -75,17 +79,28 @@ public sealed class VersionManager(DownloadService downloads)
             .ToList();
     }
 
-    private async Task<string> ResolveVanillaAsync(string version, CancellationToken token)
+    private async Task<ServerDownload> ResolvePurpurAsync(string version, CancellationToken token)
+    {
+        // Pin the exact build so the published MD5 matches the file downloaded.
+        var escaped = Uri.EscapeDataString(version);
+        using var doc = JsonDocument.Parse(await downloads.GetStringAsync($"https://api.purpurmc.org/v2/purpur/{escaped}/latest", token));
+        var build = doc.RootElement.GetProperty("build").GetString();
+        if (string.IsNullOrWhiteSpace(build)) throw new InvalidOperationException($"No Purpur build is available for Minecraft {version}.");
+        var md5 = doc.RootElement.TryGetProperty("md5", out var hash) ? hash.GetString() : null;
+        return new ServerDownload($"https://api.purpurmc.org/v2/purpur/{escaped}/{Uri.EscapeDataString(build)}/download", md5 is null ? null : "MD5", md5);
+    }
+
+    private async Task<ServerDownload> ResolveVanillaAsync(string version, CancellationToken token)
     {
         using var manifest = JsonDocument.Parse(await downloads.GetStringAsync("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json", token));
         var item = manifest.RootElement.GetProperty("versions").EnumerateArray().FirstOrDefault(value => value.GetProperty("id").GetString() == version);
         if (item.ValueKind == JsonValueKind.Undefined) throw new InvalidOperationException("Vanilla version not found.");
         using var detail = JsonDocument.Parse(await downloads.GetStringAsync(item.GetProperty("url").GetString()!, token));
         if (!detail.RootElement.GetProperty("downloads").TryGetProperty("server", out var server)) throw new InvalidOperationException("This version has no server download.");
-        return server.GetProperty("url").GetString()!;
+        return new ServerDownload(server.GetProperty("url").GetString()!, "SHA1", server.GetProperty("sha1").GetString());
     }
 
-    private async Task<string> ResolvePaperMcAsync(string project, string version, CancellationToken token)
+    private async Task<ServerDownload> ResolvePaperMcAsync(string project, string version, CancellationToken token)
     {
         using var doc = JsonDocument.Parse(await downloads.GetStringAsync($"https://fill.papermc.io/v3/projects/{project}/versions/{Uri.EscapeDataString(version)}/builds", token));
         if (doc.RootElement.ValueKind != JsonValueKind.Array) throw new InvalidOperationException($"No {project} build is available for Minecraft {version}.");
@@ -101,7 +116,9 @@ public sealed class VersionManager(DownloadService downloads)
             if (chosen.ValueKind == JsonValueKind.Undefined) chosen = build;
         }
         if (chosen.ValueKind == JsonValueKind.Undefined) throw new InvalidOperationException($"No {project} build is available for Minecraft {version}.");
-        return chosen.GetProperty("downloads").GetProperty("server:default").GetProperty("url").GetString()!;
+        var download = chosen.GetProperty("downloads").GetProperty("server:default");
+        var sha256 = download.TryGetProperty("checksums", out var checksums) && checksums.TryGetProperty("sha256", out var value) ? value.GetString() : null;
+        return new ServerDownload(download.GetProperty("url").GetString()!, sha256 is null ? null : "SHA256", sha256);
     }
 
     private async Task<string> ResolveFabricAsync(string version, CancellationToken token)

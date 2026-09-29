@@ -382,11 +382,29 @@ public partial class PrototypeWindow : Window
                         if (!await b.StopGracefullyAsync(target, TimeSpan.FromSeconds(20)))
                             MessageBox.Show($"{target.Name} did not stop within 20 seconds. Select it and use Kill only if you are certain it is stuck.", "Stop timeout", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }))
-                : ActionButton("Start", async (_, _) => await RunServerAction("Start", target, b => b.StartAsync(target))));
+                : ActionButton("Start", async (_, _) => { if (await ConfirmJavaAsync(target)) await RunServerAction("Start", target, b => b.StartAsync(target)); }));
             Grid.SetColumn(buttons, 1); row.Children.Add(buttons);
             stack.Children.Add(row);
         }
         card.Child = stack; return card;
+    }
+
+    /// <summary>
+    /// Checks the server's Java before starting. Missing Java blocks the start; an older Java than
+    /// the Minecraft version needs asks first, since the server would almost certainly fail.
+    /// </summary>
+    private async Task<bool> ConfirmJavaAsync(ServerProfile profile)
+    {
+        var result = await ASimpleMinecraftServer.Services.JavaDetector.ValidateAsync(profile.JavaPath, profile.Version);
+        if (result.IsValid) return true;
+        if (result.Installation is null)
+        {
+            MessageBox.Show(this, $"{result.Message}\n\nInstall Java {result.RequiredMajorVersion} (for example from adoptium.net), or set the Java path in this server's Settings.", "Java not found", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+        // Versions MystMC cannot read (custom or imported servers) are only checked for a working Java.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(profile.Version ?? string.Empty, @"^\d+\.\d+")) return true;
+        return MessageBox.Show(this, $"{result.Message}\n\nThe server will most likely fail to start. Start anyway?", "Java version", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
     }
 
     private async Task RunServerAction(string action, ServerProfile profile, Func<NativeBackendController, Task> work)
@@ -414,14 +432,14 @@ public partial class PrototypeWindow : Window
         outer.Children.Add(TitleRow("server", "Install a New Minecraft Server"));
         outer.Children.Add(new TextBlock
         {
-            Text = "Choose a server implementation and Minecraft version. MystMC will download the correct server JAR, create the folder, accept the EULA, create server.properties, and add the new server profile.",
+            Text = "Choose a server implementation and Minecraft version. MystMC will download the correct server JAR, create the folder and server.properties, and add the new server profile.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)FindResource("MutedTextBrush"),
             Margin = new Thickness(0, 0, 0, 12)
         });
 
         var form = new Grid();
-        for (var i = 0; i < 9; i++) form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var i = 0; i < 10; i++) form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
         form.ColumnDefinitions.Add(new ColumnDefinition());
 
@@ -431,6 +449,7 @@ public partial class PrototypeWindow : Window
         var type = new ComboBox { ItemsSource = _backend.SupportedServerTypes, SelectedItem = "Paper", Margin = new Thickness(0, 3, 0, 3) };
         var version = new ComboBox { IsEditable = true, IsTextSearchEnabled = true, Margin = new Thickness(0, 3, 0, 3), MinWidth = 180 };
         var memory = new TextBox { Text = "4", Margin = new Thickness(0, 3, 0, 3) };
+        var port = new TextBox { Text = _backend.SuggestFreePort().ToString(), Margin = new Thickness(0, 3, 0, 3), ToolTip = "Each server needs its own port. The next free one is filled in for you." };
         var customJar = new TextBox { Margin = new Thickness(0, 3, 0, 3), IsEnabled = false };
         var java = new TextBox { Text = "java", Margin = new Thickness(0, 3, 0, 3) };
         var provider = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedTextBrush"), Margin = new Thickness(0, 6, 0, 3) };
@@ -441,10 +460,20 @@ public partial class PrototypeWindow : Window
         AddFormRow(form, 3, "Server type", type);
         AddFormRow(form, 4, "Minecraft version", version);
         AddFormRow(form, 5, "Memory (GB)", memory);
-        AddFormRow(form, 6, "Custom server JAR", customJar);
-        AddFormRow(form, 7, "Java executable", java);
-        AddFormRow(form, 8, "Download source", provider);
+        AddFormRow(form, 6, "Port", port);
+        AddFormRow(form, 7, "Custom server JAR", customJar);
+        AddFormRow(form, 8, "Java executable", java);
+        AddFormRow(form, 9, "Download source", provider);
         outer.Children.Add(form);
+
+        // The Minecraft EULA must be accepted by the user, not on their behalf.
+        var eulaLink = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Minecraft End User License Agreement")) { NavigateUri = new Uri("https://aka.ms/MinecraftEULA") };
+        eulaLink.RequestNavigate += (_, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; };
+        var eulaText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        eulaText.Inlines.Add("I have read and accept the ");
+        eulaText.Inlines.Add(eulaLink);
+        var eula = new CheckBox { Content = eulaText, Margin = new Thickness(0, 10, 0, 0) };
+        outer.Children.Add(eula);
 
         var status = new TextBlock
         {
@@ -560,6 +589,16 @@ public partial class PrototypeWindow : Window
             var selectedType = type.SelectedItem?.ToString() ?? "Paper";
             var selectedVersion = version.SelectedItem?.ToString() ?? version.Text?.Trim() ?? string.Empty;
             if (!int.TryParse(memory.Text, out var gb)) gb = 4;
+            if (!int.TryParse(port.Text, out var serverPort) || serverPort is < 1 or > 65535)
+            {
+                status.Text = "Enter a port between 1 and 65535.";
+                return;
+            }
+            if (eula.IsChecked != true)
+            {
+                status.Text = "Accept the Minecraft EULA to install a server.";
+                return;
+            }
 
             try
             {
@@ -575,7 +614,9 @@ public partial class PrototypeWindow : Window
                     selectedVersion,
                     gb,
                     java.Text,
-                    customJar.Text);
+                    serverPort,
+                    eulaAccepted: true,
+                    customJarPath: customJar.Text);
 
                 ServerPicker.SelectedItem = profile;
                 status.Text = $"Installed {profile.Type} {profile.Version} successfully in {profile.Folder}.";
@@ -590,9 +631,12 @@ public partial class PrototypeWindow : Window
             }
             finally
             {
-                installButton.IsEnabled = true;
+                installButton.IsEnabled = eula.IsChecked == true;
             }
         }, "GreenActionButton");
+        installButton.IsEnabled = false;
+        eula.Checked += (_, _) => installButton.IsEnabled = true;
+        eula.Unchecked += (_, _) => installButton.IsEnabled = false;
         actions.Children.Add(installButton);
         outer.Children.Add(actions);
 
@@ -713,7 +757,7 @@ public partial class PrototypeWindow : Window
         grid.SelectionChanged += (_, _) => { if (grid.SelectedItem is PluginPack p) preview.Text = _backend.PluginPacks.Preview(p); };
         var note = Card(); note.Padding = new Thickness(12); note.Margin = new Thickness(0, 8, 0, 0); note.Child = new TextBlock { Text = "Plugin Packs are curated Modrinth project groups. MystMC resolves a compatible release for the selected Minecraft version and installs each JAR into the server's plugins folder.", TextWrapping = TextWrapping.Wrap }; root.Children.Add(note);
         var actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        actions.Children.Add(ActionButton("Install Selected Pack", async (_, _) => { if (grid.SelectedItem is not PluginPack pack) { MessageBox.Show("Select a plugin pack first."); return; } try { var installed = await _backend.InstallPluginPackAsync(pack); MessageBox.Show($"Installed {installed.Count} plugin(s):\n" + string.Join("\n", installed), "Plugin Pack"); Navigate("Plugins"); } catch (Exception ex) { ShowError("Plugin pack installation failed", ex); } }, "GreenActionButton"));
+        actions.Children.Add(ActionButton("Install Selected Pack", async (_, _) => { if (grid.SelectedItem is not PluginPack pack) { MessageBox.Show("Select a plugin pack first."); return; } try { var result = await _backend.InstallPluginPackAsync(pack); var message = $"Installed {result.Installed.Count} plugin(s):\n" + string.Join("\n", result.Installed); if (result.Skipped.Count > 0) message += $"\n\nSkipped {result.Skipped.Count}:\n" + string.Join("\n", result.Skipped); MessageBox.Show(message, "Plugin Pack"); Navigate("Plugins"); } catch (Exception ex) { ShowError("Plugin pack installation failed", ex); } }, "GreenActionButton"));
         actions.Children.Add(ActionButton("Open Plugin Manager", (_, _) => Navigate("Plugins")));
         root.Children.Add(actions);
         return root;
@@ -851,7 +895,7 @@ public partial class PrototypeWindow : Window
         {
             switch (action)
             {
-                case "Start": await _backend.StartAsync(); break;
+                case "Start": if (_backend.SelectedServer is { } toStart && await ConfirmJavaAsync(toStart)) await _backend.StartAsync(); break;
                 case "Stop":
                     if (!await _backend.StopGracefullyAsync(TimeSpan.FromSeconds(20)))
                         MessageBox.Show("The server did not stop within 20 seconds. Use Kill only if you are certain the server is stuck.", "Stop timeout", MessageBoxButton.OK, MessageBoxImage.Warning);

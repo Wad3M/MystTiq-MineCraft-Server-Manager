@@ -38,6 +38,7 @@ public sealed class PluginRecord : INotifyPropertyChanged
     public string? UpdateProjectId { get => _updateProjectId; set => _updateProjectId = value; }
     public Uri? UpdateDownloadUri { get => _updateDownloadUri; set => _updateDownloadUri = value; }
     public string? UpdateFileName { get => _updateFileName; set => _updateFileName = value; }
+    public string? UpdateSha512 { get; set; }
 
     public bool IsEnabled
     {

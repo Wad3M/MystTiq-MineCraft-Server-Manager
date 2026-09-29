@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
 
 namespace ASimpleMinecraftServer.Services;
 
@@ -10,8 +11,8 @@ public sealed class DownloadService : IDisposable
 
     public DownloadService()
     {
-        var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "1.2.1";
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ASimpleMinecraftServer/{version} (https://github.com/ASimpleMinecraftServer; desktop server manager)");
+        var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "0.0.0";
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"MystTiq-MineCraft-Server-Manager/{version} (github.com/Wad3M/MystTiq-MineCraft-Server-Manager)");
     }
 
     public Task<string> GetStringAsync(string url, CancellationToken cancellationToken = default) =>
@@ -38,6 +39,33 @@ public sealed class DownloadService : IDisposable
             if (total is > 0) progress?.Report(written * 100d / total.Value);
         }
         progress?.Report(100);
+    }
+
+    /// <summary>
+    /// Downloads a server JAR and, when the provider published a checksum, deletes the file and
+    /// throws if it does not match.
+    /// </summary>
+    public async Task DownloadVerifiedAsync(ServerDownload download, string destination, CancellationToken cancellationToken = default)
+    {
+        await DownloadFileAsync(download.Url, destination, cancellationToken);
+        if (string.IsNullOrWhiteSpace(download.Hash)) return;
+
+        byte[] actual;
+        await using (var stream = File.OpenRead(destination))
+        {
+            actual = download.HashAlgorithm switch
+            {
+                "SHA256" => await SHA256.HashDataAsync(stream, cancellationToken),
+                "SHA1" => await SHA1.HashDataAsync(stream, cancellationToken),
+                "MD5" => await MD5.HashDataAsync(stream, cancellationToken),
+                _ => throw new InvalidOperationException($"Unsupported checksum type {download.HashAlgorithm}.")
+            };
+        }
+        if (!Convert.ToHexString(actual).Equals(download.Hash, StringComparison.OrdinalIgnoreCase))
+        {
+            File.Delete(destination);
+            throw new InvalidDataException($"The downloaded server JAR failed its {download.HashAlgorithm} check and was deleted. Try again, and report it if it keeps happening.");
+        }
     }
 
     public void Dispose() => _httpClient.Dispose();

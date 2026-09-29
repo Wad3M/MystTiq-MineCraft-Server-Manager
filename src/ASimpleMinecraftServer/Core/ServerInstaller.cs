@@ -12,6 +12,7 @@ public sealed record ServerInstallRequest(
     string Version,
     int MemoryGb,
     string? CustomJarPath,
+    bool EulaAccepted,
     int Port = 25565,
     int MaxPlayers = 20,
     string Difficulty = "normal",
@@ -54,7 +55,8 @@ public sealed class ServerInstaller
         var normalizedRequest = request with { Folder = normalizedFolder };
         await installer.InstallAsync(normalizedRequest, cancellationToken);
 
-        var eulaText = "# Accepted by A Simple Minecraft Server" + Environment.NewLine
+        // Only reached when the user ticked the EULA box (checked in Validate).
+        var eulaText = $"# Minecraft EULA (https://aka.ms/MinecraftEULA) accepted by the user in MystTiq Minecraft Server Manager on {DateTimeOffset.Now:yyyy-MM-dd}" + Environment.NewLine
             + "eula=true" + Environment.NewLine;
         await File.WriteAllTextAsync(
             Path.Combine(normalizedFolder, "eula.txt"),
@@ -105,6 +107,11 @@ public sealed class ServerInstaller
         if (string.IsNullOrWhiteSpace(request.Folder))
         {
             throw new InvalidOperationException("Choose an install folder.");
+        }
+
+        if (!request.EulaAccepted)
+        {
+            throw new InvalidOperationException("You must accept the Minecraft EULA before a server can be installed.");
         }
 
         if (request.MemoryGb < 1)

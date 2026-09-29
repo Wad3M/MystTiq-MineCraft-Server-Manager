@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.2.0** (current) | [Multi-server support, port checks, new icons](RELEASE_NOTES_v0.2.0.md) |
+| **0.2.1** (current) | [Port field, EULA consent, verified downloads, Java check](RELEASE_NOTES_v0.2.1.md) |
+| 0.2.0 | [Multi-server support, port checks, new icons](RELEASE_NOTES_v0.2.0.md) |
 
 ## Earlier versions
 

@@ -13,5 +13,7 @@ public sealed class PluginCatalogItem
     public string CompatibilityText { get; set; } = "Compatible version available";
     public Uri? DownloadUri { get; set; }
     public string? FileName { get; set; }
+    /// <summary>SHA-512 of the download as published by Modrinth, checked after downloading.</summary>
+    public string? Sha512 { get; set; }
     public bool CanInstall => DownloadUri is not null && !string.IsNullOrWhiteSpace(FileName);
 }

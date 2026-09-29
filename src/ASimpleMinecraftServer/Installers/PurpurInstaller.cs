@@ -8,7 +8,7 @@ public sealed class PurpurInstaller(DownloadService downloads, VersionManager ve
 {
     public async Task InstallAsync(ServerInstallRequest request, CancellationToken cancellationToken = default)
     {
-        var url = await versions.ResolveDownloadUrlAsync("Purpur", request.Version, cancellationToken);
-        await downloads.DownloadFileAsync(url, Path.Combine(request.Folder, "server.jar"), cancellationToken);
+        var download = await versions.ResolveDownloadAsync("Purpur", request.Version, cancellationToken);
+        await downloads.DownloadVerifiedAsync(download, Path.Combine(request.Folder, "server.jar"), cancellationToken);
     }
 }
