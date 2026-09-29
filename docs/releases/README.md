@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.2.1** (current) | [Port field, EULA consent, verified downloads, Java check](RELEASE_NOTES_v0.2.1.md) |
+| **0.3.0** (current) | [Add-ons page: plugins and Fabric mods from Modrinth](RELEASE_NOTES_v0.3.0.md) |
+| 0.2.1 | [Port field, EULA consent, verified downloads, Java check](RELEASE_NOTES_v0.2.1.md) |
 | 0.2.0 | [Multi-server support, port checks, new icons](RELEASE_NOTES_v0.2.0.md) |
 
 ## Earlier versions

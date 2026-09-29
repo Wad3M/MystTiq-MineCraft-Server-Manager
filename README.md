@@ -4,7 +4,7 @@ A simple Windows app for creating and running Minecraft servers. The app window 
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.2.1, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.3.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
@@ -13,7 +13,8 @@ Pick a server type and version, give it a name, and the app downloads it, sets i
 - **Port conflict check.** A server won't start if its port is already taken.
 - **Start, stop, restart, and a live console.** Graceful stop, with a warning before any force kill.
 - **Backups.** Manual or scheduled, with a retention limit and automatic safety backups before updates.
-- **Plugins and datapacks.** Install from Modrinth or from a file, then enable, disable, or remove them.
+- **Add-ons: plugins and mods.** Paper, Purpur, and Folia servers get plugins; Fabric servers get mods. Search Modrinth in the app (only compatible, server-side results), install with one click (SHA-512 verified), or add a JAR from a file.
+- **Datapacks.** Install, enable, disable, or remove them.
 - **Worlds and players.** Import, rename, and archive worlds. Op, kick, or ban players.
 - **Diagnostics.** Health, log, startup, and performance checks. They only read files and never change a server unless you tell them to.
 - **Minecraft-style icons.** The UI uses the MystCraft icon pack.
@@ -100,4 +101,4 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 ## Release notes
 
-The latest is [v0.2.1](docs/releases/RELEASE_NOTES_v0.2.1.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.3.0](docs/releases/RELEASE_NOTES_v0.3.0.md). See [`docs/releases/`](docs/releases/) for all versions.

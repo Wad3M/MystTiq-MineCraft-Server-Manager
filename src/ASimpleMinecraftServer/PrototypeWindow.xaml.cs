@@ -22,7 +22,7 @@ public partial class PrototypeWindow : Window
     private readonly Dictionary<string, string> _icons = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Dashboard"]="dashboard", ["Create Server"]="create", ["Console"]="console", ["Worlds"]="worlds", ["Players"]="players_nav",
-        ["Plugins"]="plugins_nav", ["Datapacks"]="datapacks", ["Resource Packs"]="resourcepacks", ["Templates"]="templates", ["Plugin Packs"]="pluginpacks",
+        ["Add-ons"]="plugins_nav", ["Datapacks"]="datapacks", ["Resource Packs"]="resourcepacks", ["Templates"]="templates", ["Plugin Packs"]="pluginpacks",
         ["Migration"]="migration", ["Performance"]="performance", ["Health"]="health", ["Log Analyzer"]="loganalyzer", ["Startup Analyzer"]="startup",
         ["Optimization"]="optimization", ["Scheduler"]="scheduler_nav", ["Auto Backups"]="autobackups", ["Settings"]="settings_nav", ["Help"]="help", ["About"]="about",
         ["UI Preview"]="settings_top"
@@ -39,7 +39,7 @@ public partial class PrototypeWindow : Window
         ["settings_top"]="settings", ["help"]="help", ["about"]="about", ["start"]="start", ["stop"]="stop", ["restart"]="restart",
         ["kill"]="force_stop", ["backup"]="backup", ["createbackup"]="backup", ["filemanager"]="files", ["server"]="server", ["serverinfo"]="info",
         ["page_server"]="server", ["openconsole"]="terminal", ["createworld"]="new_world", ["tps"]="tps", ["cpu"]="cpu", ["memory"]="ram",
-        ["disk"]="disk", ["mspt"]="mspt", ["clock"]="time", ["signal"]="network", ["log"]="logs", ["edit"]="edit", ["viewall"]="search"
+        ["disk"]="disk", ["mspt"]="mspt", ["clock"]="time", ["signal"]="network", ["log"]="logs", ["edit"]="edit", ["viewall"]="search", ["search"]="search"
     };
     private static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -193,7 +193,7 @@ public partial class PrototypeWindow : Window
 
     private void BuildNavigation()
     {
-        AddSection("SERVER MANAGEMENT", ["Worlds", "Players", "Plugins", "Datapacks", "Resource Packs", "Templates", "Plugin Packs", "Migration"]);
+        AddSection("SERVER MANAGEMENT", ["Worlds", "Players", "Add-ons", "Datapacks", "Resource Packs", "Templates", "Plugin Packs", "Migration"]);
         AddSection("SERVER TOOLS", ["Performance", "Health", "Log Analyzer", "Startup Analyzer", "Optimization"]);
         AddSection("AUTOMATION", ["Scheduler", "Auto Backups"]);
         AddSection("SETTINGS", ["Settings"]);
@@ -243,7 +243,7 @@ public partial class PrototypeWindow : Window
                 "Console" => BuildConsolePage(),
                 "Worlds" => BuildWorldsPage(),
                 "Players" => BuildPlayersPage(),
-                "Plugins" => BuildPluginsPage(),
+                "Add-ons" => BuildAddonsPage(),
                 "Datapacks" => BuildDatapacksPage(),
                 "Resource Packs" => BuildResourcePacksPage(),
                 "Templates" => BuildTemplatesPage(),
@@ -338,7 +338,7 @@ public partial class PrototypeWindow : Window
             var plugins = Safe(() => _backend.Plugins.List(selected).Count, 0);
             protection.Children.Add(InfoLine("Backups", backups.ToString()));
             protection.Children.Add(InfoLine("Worlds", worlds.ToString()));
-            protection.Children.Add(InfoLine("Plugins", plugins.ToString()));
+            protection.Children.Add(InfoLine("Add-ons", plugins.ToString()));
             protection.Children.Add(InfoLine("Auto backup", selected.AutomaticBackupsEnabled ? "Enabled" : "Disabled"));
         }
         else protection.Children.Add(Muted("No server selected."));
@@ -699,16 +699,110 @@ public partial class PrototypeWindow : Window
         return stack;
     }
 
-    private UIElement BuildPluginsPage()
+    /// <summary>
+    /// One page for server add-ons: plugins on Paper/Purpur/Folia, mods on Fabric.
+    /// Shows what's installed and a Modrinth search filtered to what this server can run.
+    /// </summary>
+    private UIElement BuildAddonsPage()
     {
         if (!TrySelected(out var profile, out var unavailable)) return unavailable;
-        var stack = new StackPanel(); var plugins = _backend!.Plugins.List(profile); var grid = DataGridFor(plugins, 380); stack.Children.Add(grid);
+        var kind = AddonKinds.For(profile);
+        if (kind == AddonKind.None)
+            return MessagePage("Add-ons", $"{profile.Type} servers can't load plugins or mods.\n\nTo use add-ons, create a Paper, Purpur, or Folia server (plugins) or a Fabric server (mods). If this server already is one of those, set its type in Settings.");
+
+        var noun = AddonKinds.Noun(kind);
+        var nouns = noun + "s";
+        var root = new StackPanel();
+
+        // Installed add-ons
+        var installedCard = Card(); installedCard.Padding = new Thickness(12); installedCard.Margin = new Thickness(0, 0, 0, 8);
+        var installed = new StackPanel(); installedCard.Child = installed;
+        installed.Children.Add(TitleRow("plugins_nav", $"Installed {nouns} ({AddonKinds.FolderName(kind)} folder)"));
+        var grid = new DataGrid { ItemsSource = _backend!.Plugins.List(profile), AutoGenerateColumns = false, IsReadOnly = true, SelectionMode = DataGridSelectionMode.Single, MinHeight = 160, CanUserAddRows = false };
+        grid.Columns.Add(new DataGridTextColumn { Header = "Name", Binding = new System.Windows.Data.Binding(nameof(PluginRecord.Name)), Width = new DataGridLength(2, DataGridLengthUnitType.Star) });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Version", Binding = new System.Windows.Data.Binding(nameof(PluginRecord.Version)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Status", Binding = new System.Windows.Data.Binding(nameof(PluginRecord.StatusText)), Width = DataGridLength.Auto });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Health", Binding = new System.Windows.Data.Binding(nameof(PluginRecord.HealthText)), Width = DataGridLength.Auto });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Needs", Binding = new System.Windows.Data.Binding(nameof(PluginRecord.Dependencies)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        installed.Children.Add(grid);
         var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        buttons.Children.Add(ActionButton("Install JAR…", (_, _) => { var file = PickFile("Plugin JAR (*.jar)|*.jar"); if (file is null) return; _backend.Plugins.Install(profile, file, Confirm("Overwrite an existing plugin with the same filename if necessary?")); Navigate("Plugins"); }, "GreenActionButton"));
-        buttons.Children.Add(ActionButton("Enable / Disable", (_, _) => { if (grid.SelectedItem is PluginRecord p) { _backend.Plugins.SetEnabled(p, !p.IsEnabled); Navigate("Plugins"); } }));
-        buttons.Children.Add(ActionButton("Delete", (_, _) => { if (grid.SelectedItem is PluginRecord p && Confirm($"Delete plugin '{p.Name}'?")) { _backend.Plugins.Delete(p); Navigate("Plugins"); } }, "DangerButton"));
-        buttons.Children.Add(ActionButton("Open Plugins Folder", (_, _) => OpenFolder(_backend.Plugins.GetPluginFolder(profile))));
-        stack.Children.Add(buttons); return stack;
+        buttons.Children.Add(ActionButton("Install from File…", (_, _) => { var file = PickFile($"{char.ToUpper(noun[0]) + noun[1..]} JAR (*.jar)|*.jar"); if (file is null) return; try { _backend.Plugins.Install(profile, file, Confirm($"Overwrite an existing {noun} with the same filename if necessary?")); } catch (Exception ex) { ShowError($"Could not install {noun}", ex); } Navigate("Add-ons"); }));
+        buttons.Children.Add(ActionButton("Enable / Disable", (_, _) => { if (grid.SelectedItem is PluginRecord p) { _backend.Plugins.SetEnabled(p, !p.IsEnabled); Navigate("Add-ons"); } }));
+        buttons.Children.Add(ActionButton("Delete", (_, _) => { if (grid.SelectedItem is PluginRecord p && Confirm($"Delete {noun} '{p.Name}'?")) { _backend.Plugins.Delete(p); Navigate("Add-ons"); } }, "DangerButton"));
+        buttons.Children.Add(ActionButton("Open Folder", (_, _) => { Directory.CreateDirectory(_backend.Plugins.GetPluginFolder(profile)); OpenFolder(_backend.Plugins.GetPluginFolder(profile)); }));
+        installed.Children.Add(buttons);
+        installed.Children.Add(Muted($"Changes take effect the next time the server starts."));
+        root.Children.Add(installedCard);
+
+        // Modrinth search
+        var browseCard = Card(); browseCard.Padding = new Thickness(12);
+        var browse = new StackPanel(); browseCard.Child = browse;
+        browse.Children.Add(TitleRow("search", $"Find {nouns} on Modrinth"));
+        browse.Children.Add(Muted($"Only server-side {nouns} for {profile.Type} {profile.Version} are shown. Every download is checked against Modrinth's SHA-512 hash."));
+        if (kind == AddonKind.Mod)
+        {
+            var fabricApiInstalled = _backend.Plugins.List(profile).Any(p => p.FileName.StartsWith("fabric-api", StringComparison.OrdinalIgnoreCase));
+            if (!fabricApiInstalled)
+            {
+                var hint = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+                hint.Children.Add(new TextBlock { Text = "Most Fabric mods need Fabric API. ", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+                hint.Children.Add(ActionButton("Install Fabric API", async (_, _) => await InstallAddonAsync(() => _backend.InstallAddonByIdAsync("fabric-api"), "Fabric API"), "GreenActionButton"));
+                browse.Children.Add(hint);
+            }
+        }
+        var searchRow = new DockPanel { Margin = new Thickness(0, 8, 0, 8) };
+        var searchButton = ActionButton("Search", (_, _) => { }, "GreenActionButton");
+        DockPanel.SetDock(searchButton, Dock.Right); searchRow.Children.Add(searchButton);
+        var query = new TextBox { Margin = new Thickness(0, 0, 6, 6), ToolTip = $"Search by name, e.g. {(kind == AddonKind.Mod ? "lithium" : "luckperms")}" };
+        searchRow.Children.Add(query);
+        browse.Children.Add(searchRow);
+        var results = new DataGrid { AutoGenerateColumns = false, IsReadOnly = true, SelectionMode = DataGridSelectionMode.Single, MinHeight = 200, CanUserAddRows = false };
+        results.Columns.Add(new DataGridTextColumn { Header = "Name", Binding = new System.Windows.Data.Binding(nameof(PluginCatalogItem.Name)), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
+        results.Columns.Add(new DataGridTextColumn { Header = "Author", Binding = new System.Windows.Data.Binding(nameof(PluginCatalogItem.Author)), Width = DataGridLength.Auto });
+        results.Columns.Add(new DataGridTextColumn { Header = "Downloads", Binding = new System.Windows.Data.Binding(nameof(PluginCatalogItem.DownloadsText)), Width = DataGridLength.Auto });
+        results.Columns.Add(new DataGridTextColumn { Header = "Description", Binding = new System.Windows.Data.Binding(nameof(PluginCatalogItem.Description)), Width = new DataGridLength(2.5, DataGridLengthUnitType.Star) });
+        browse.Children.Add(results);
+        var status = Muted("Type a name and press Search. Leave it empty to see the most popular.");
+        status.Margin = new Thickness(0, 6, 0, 0);
+        browse.Children.Add(status);
+
+        async Task RunSearchAsync()
+        {
+            try
+            {
+                searchButton.IsEnabled = false; status.Text = "Searching Modrinth…";
+                var found = await _backend.SearchAddonsAsync(query.Text.Trim());
+                results.ItemsSource = found;
+                status.Text = found.Count == 0 ? $"No compatible {nouns} found." : $"{found.Count} result(s). Select one and press Install.";
+            }
+            catch (Exception ex) { status.Text = $"Search failed: {ex.Message}"; }
+            finally { searchButton.IsEnabled = true; }
+        }
+        searchButton.Click += async (_, _) => await RunSearchAsync();
+        query.KeyDown += async (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) await RunSearchAsync(); };
+
+        var install = ActionButton($"Install Selected {char.ToUpper(noun[0]) + noun[1..]}", async (_, _) =>
+        {
+            if (results.SelectedItem is not PluginCatalogItem item) { status.Text = $"Select a {noun} in the results first."; return; }
+            await InstallAddonAsync(() => _backend.InstallAddonAsync(item), item.Name);
+        }, "GreenActionButton");
+        install.Margin = new Thickness(0, 8, 6, 0);
+        browse.Children.Add(install);
+        root.Children.Add(browseCard);
+        return root;
+    }
+
+    private async Task InstallAddonAsync(Func<Task<PluginRecord>> install, string name)
+    {
+        try
+        {
+            PrototypeStatus.Text = $"Installing {name}…";
+            var record = await install();
+            var needs = record.Dependencies is { Length: > 0 } d && d != "—" ? $"\n\nIt needs: {d}. Install those too if they aren't already." : string.Empty;
+            MessageBox.Show(this, $"Installed {record.Name} {record.Version}.{needs}\n\nRestart the server to load it.", "Add-on installed", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) { ShowError($"Could not install {name}", ex); }
+        Navigate("Add-ons");
     }
 
     private UIElement BuildDatapacksPage()
@@ -757,8 +851,8 @@ public partial class PrototypeWindow : Window
         grid.SelectionChanged += (_, _) => { if (grid.SelectedItem is PluginPack p) preview.Text = _backend.PluginPacks.Preview(p); };
         var note = Card(); note.Padding = new Thickness(12); note.Margin = new Thickness(0, 8, 0, 0); note.Child = new TextBlock { Text = "Plugin Packs are curated Modrinth project groups. MystMC resolves a compatible release for the selected Minecraft version and installs each JAR into the server's plugins folder.", TextWrapping = TextWrapping.Wrap }; root.Children.Add(note);
         var actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        actions.Children.Add(ActionButton("Install Selected Pack", async (_, _) => { if (grid.SelectedItem is not PluginPack pack) { MessageBox.Show("Select a plugin pack first."); return; } try { var result = await _backend.InstallPluginPackAsync(pack); var message = $"Installed {result.Installed.Count} plugin(s):\n" + string.Join("\n", result.Installed); if (result.Skipped.Count > 0) message += $"\n\nSkipped {result.Skipped.Count}:\n" + string.Join("\n", result.Skipped); MessageBox.Show(message, "Plugin Pack"); Navigate("Plugins"); } catch (Exception ex) { ShowError("Plugin pack installation failed", ex); } }, "GreenActionButton"));
-        actions.Children.Add(ActionButton("Open Plugin Manager", (_, _) => Navigate("Plugins")));
+        actions.Children.Add(ActionButton("Install Selected Pack", async (_, _) => { if (grid.SelectedItem is not PluginPack pack) { MessageBox.Show("Select a plugin pack first."); return; } try { var result = await _backend.InstallPluginPackAsync(pack); var message = $"Installed {result.Installed.Count} plugin(s):\n" + string.Join("\n", result.Installed); if (result.Skipped.Count > 0) message += $"\n\nSkipped {result.Skipped.Count}:\n" + string.Join("\n", result.Skipped); MessageBox.Show(message, "Plugin Pack"); Navigate("Add-ons"); } catch (Exception ex) { ShowError("Plugin pack installation failed", ex); } }, "GreenActionButton"));
+        actions.Children.Add(ActionButton("Open Add-ons", (_, _) => Navigate("Add-ons")));
         root.Children.Add(actions);
         return root;
     }
@@ -852,8 +946,13 @@ public partial class PrototypeWindow : Window
         var root = new StackPanel();
         var card = Card(); card.Padding = new Thickness(16); var stack = new StackPanel(); stack.Children.Add(TitleRow("settings_nav", "Server Profile"));
         var name = new TextBox { Text = profile.Name, Margin = new Thickness(0, 3, 0, 8) }; var memory = new TextBox { Text = profile.MemoryGb.ToString(), Margin = new Thickness(0, 3, 0, 8) }; var java = new TextBox { Text = profile.JavaPath, Margin = new Thickness(0, 3, 0, 8) }; var jar = new TextBox { Text = profile.Jar, Margin = new Thickness(0, 3, 0, 8) };
-        stack.Children.Add(new TextBlock { Text = "Name" }); stack.Children.Add(name); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
-        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text); Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder))); stack.Children.Add(buttons); card.Child = stack; root.Children.Add(card);
+        // Type and version drive add-on compatibility and the Java check; imported servers only have a guess.
+        var serverType = new ComboBox { IsEditable = true, ItemsSource = new[] { "Vanilla", "Paper", "Purpur", "Folia", "Fabric", "Custom JAR" }, Text = profile.Type, Margin = new Thickness(0, 3, 0, 8) };
+        var mcVersion = new TextBox { Text = profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase) ? string.Empty : profile.Version, Margin = new Thickness(0, 3, 0, 8), ToolTip = "The Minecraft version this server runs, e.g. 1.21.4" };
+        stack.Children.Add(new TextBlock { Text = "Name" }); stack.Children.Add(name);
+        stack.Children.Add(new TextBlock { Text = "Server type" }); stack.Children.Add(serverType);
+        stack.Children.Add(new TextBlock { Text = "Minecraft version" }); stack.Children.Add(mcVersion); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
+        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text, serverType.Text, mcVersion.Text); Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder))); stack.Children.Add(buttons); card.Child = stack; root.Children.Add(card);
         var config = new ConfigurationView(); config.ResetForSelection(profile); config.ConfigurationSaved += (_, _) => _backend!.SaveProfiles(); root.Children.Add(config);
         return root;
     }
@@ -1111,6 +1210,7 @@ public partial class PrototypeWindow : Window
         "Resource Packs" => "Validate and configure the server resource pack",
         "Templates" => "Apply curated server.properties templates",
         "Plugin Packs" => "Curated groups of compatible server plugins",
+        "Add-ons" => "Plugins for Paper, Purpur and Folia, or mods for Fabric",
         "Performance" => "Process metrics and server performance guidance",
         "UI Preview" => "Theme, controls, icons, spacing, and responsive testing",
         _ => $"{page} management"

@@ -19,11 +19,19 @@ public sealed class ModrinthPluginCatalogService : IDisposable
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"MystTiq-MineCraft-Server-Manager/{typeof(ModrinthPluginCatalogService).Assembly.GetName().Version?.ToString(3)} (github.com/Wad3M/MystTiq-MineCraft-Server-Manager)");
     }
 
-    public async Task<IReadOnlyList<PluginCatalogItem>> SearchAsync(string query, string minecraftVersion, CancellationToken cancellationToken)
+    private static readonly string[] PluginLoaders = ["paper", "purpur", "folia", "spigot", "bukkit"];
+    private static readonly string[] ModLoaders = ["fabric"];
+
+    /// <summary>
+    /// Searches Modrinth for server-side add-ons that match the server's loader and Minecraft version.
+    /// </summary>
+    public async Task<IReadOnlyList<PluginCatalogItem>> SearchAsync(string query, string minecraftVersion, AddonKind kind, CancellationToken cancellationToken)
     {
+        var loaders = kind == AddonKind.Mod ? ModLoaders : PluginLoaders;
         var facets = JsonSerializer.Serialize(new[]
         {
-            new[] { "project_type:plugin" },
+            new[] { kind == AddonKind.Mod ? "project_type:mod" : "project_type:plugin" },
+            loaders.Select(loader => $"categories:{loader}").ToArray(),
             new[] { $"versions:{minecraftVersion}" },
             new[] { "server_side:required", "server_side:optional" }
         });
@@ -65,9 +73,12 @@ public sealed class ModrinthPluginCatalogService : IDisposable
         };
     }
 
-    public async Task ResolveInstallAsync(PluginCatalogItem item, string minecraftVersion, CancellationToken cancellationToken)
+    public async Task ResolveInstallAsync(PluginCatalogItem item, string minecraftVersion, CancellationToken cancellationToken) =>
+        await ResolveInstallAsync(item, minecraftVersion, AddonKind.Plugin, cancellationToken);
+
+    public async Task ResolveInstallAsync(PluginCatalogItem item, string minecraftVersion, AddonKind kind, CancellationToken cancellationToken)
     {
-        var loaders = Uri.EscapeDataString("[\"paper\",\"purpur\",\"folia\",\"spigot\",\"bukkit\"]");
+        var loaders = Uri.EscapeDataString(JsonSerializer.Serialize(kind == AddonKind.Mod ? ModLoaders : PluginLoaders));
         var versions = Uri.EscapeDataString(JsonSerializer.Serialize(new[] { minecraftVersion }));
         var url = $"project/{Uri.EscapeDataString(item.ProjectId)}/version?loaders={loaders}&game_versions={versions}";
         using var response = await _httpClient.GetAsync(url, cancellationToken);

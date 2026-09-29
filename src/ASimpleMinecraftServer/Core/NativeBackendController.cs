@@ -224,10 +224,12 @@ public sealed class NativeBackendController : IDisposable
         return profile;
     }
 
-    public void UpdateSelectedProfile(string name, int memoryGb, string javaPath, string jar)
+    public void UpdateSelectedProfile(string name, int memoryGb, string javaPath, string jar, string type, string version)
     {
         var profile = RequireSelected();
         profile.Name = string.IsNullOrWhiteSpace(name) ? profile.Name : name.Trim();
+        profile.Type = string.IsNullOrWhiteSpace(type) ? profile.Type : type.Trim();
+        profile.Version = version?.Trim() ?? string.Empty;
         profile.MemoryGb = Math.Max(1, memoryGb);
         profile.JavaPath = string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim();
         profile.Jar = string.IsNullOrWhiteSpace(jar) ? profile.Jar : jar.Trim();
@@ -351,40 +353,75 @@ public sealed class NativeBackendController : IDisposable
 
     public sealed record PluginPackResult(IReadOnlyList<string> Installed, IReadOnlyList<string> Skipped);
 
-    public async Task<PluginPackResult> InstallPluginPackAsync(PluginPack pack, CancellationToken cancellationToken = default)
+    /// <summary>Searches Modrinth for plugins or mods that fit the selected server.</summary>
+    public Task<IReadOnlyList<PluginCatalogItem>> SearchAddonsAsync(string query, CancellationToken cancellationToken = default)
+    {
+        var (profile, kind) = RequireAddonServer();
+        return _pluginCatalog.SearchAsync(query, profile.Version, kind, cancellationToken);
+    }
+
+    /// <summary>
+    /// Downloads the newest compatible build of a Modrinth project, verifies its SHA-512,
+    /// checks it is the right kind of add-on, and installs it into plugins/ or mods/.
+    /// </summary>
+    public async Task<PluginRecord> InstallAddonAsync(PluginCatalogItem item, CancellationToken cancellationToken = default)
+    {
+        var (profile, kind) = RequireAddonServer();
+        await _pluginCatalog.ResolveInstallAsync(item, profile.Version, kind, cancellationToken);
+        if (!item.CanInstall || string.IsNullOrWhiteSpace(item.FileName))
+            throw new InvalidOperationException($"{item.Name} has no {profile.Type} build for Minecraft {profile.Version}.");
+        var temp = Path.Combine(Path.GetTempPath(), "MystMC-" + Guid.NewGuid().ToString("N") + ".jar");
+        try
+        {
+            await _pluginCatalog.DownloadAsync(item, temp, cancellationToken);
+            var record = Plugins.InstallDownloaded(profile, temp, item.FileName, overwrite: true);
+            GetInstance(profile).AddConsole($"[Manager] Installed {AddonKinds.Noun(kind)} {item.Name} {item.LatestVersion}. Restart the server to load it.");
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            return record;
+        }
+        finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
+    }
+
+    /// <summary>Installs a Modrinth project by its exact id or slug (never a search guess).</summary>
+    public async Task<PluginRecord> InstallAddonByIdAsync(string projectIdOrSlug, CancellationToken cancellationToken = default)
+    {
+        var item = await _pluginCatalog.GetProjectAsync(projectIdOrSlug, cancellationToken)
+                   ?? throw new InvalidOperationException($"'{projectIdOrSlug}' was not found on Modrinth.");
+        return await InstallAddonAsync(item, cancellationToken);
+    }
+
+    private (ServerProfile Profile, AddonKind Kind) RequireAddonServer()
     {
         var profile = RequireSelected();
-        if (!profile.Type.Equals("Paper", StringComparison.OrdinalIgnoreCase)
-            && !profile.Type.Equals("Purpur", StringComparison.OrdinalIgnoreCase)
-            && !profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase))
+        var kind = AddonKinds.For(profile);
+        if (kind == AddonKind.None)
+            throw new InvalidOperationException($"{profile.Type} servers don't support plugins or mods. Create a Paper, Purpur, Folia, or Fabric server to use add-ons.");
+        if (string.IsNullOrWhiteSpace(profile.Version) || profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Set this server's Minecraft version in Settings first, so MystMC can pick compatible add-ons.");
+        return (profile, kind);
+    }
+
+    public async Task<PluginPackResult> InstallPluginPackAsync(PluginPack pack, CancellationToken cancellationToken = default)
+    {
+        var (_, kind) = RequireAddonServer();
+        if (kind != AddonKind.Plugin)
             throw new InvalidOperationException("Plugin packs require a Bukkit-compatible server such as Paper, Purpur, or Folia.");
-        if (string.IsNullOrWhiteSpace(profile.Version))
-            throw new InvalidOperationException("Set the Minecraft version in the server profile before installing a plugin pack.");
 
         var installed = new List<string>();
         var skipped = new List<string>();
         foreach (var projectId in PluginPacks.GetProjectIds(pack))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Exact project lookup only: never install whatever a search happens to return.
-            var item = await _pluginCatalog.GetProjectAsync(projectId, cancellationToken);
-            if (item is null) { skipped.Add($"{projectId}: not found on Modrinth"); continue; }
-            await _pluginCatalog.ResolveInstallAsync(item, profile.Version, cancellationToken);
-            if (!item.CanInstall || string.IsNullOrWhiteSpace(item.FileName)) { skipped.Add($"{item.Name}: no build for Minecraft {profile.Version}"); continue; }
-            var temp = Path.Combine(Path.GetTempPath(), "MystMC-" + Guid.NewGuid().ToString("N") + ".jar");
             try
             {
-                await _pluginCatalog.DownloadAsync(item, temp, cancellationToken);
-                Plugins.InstallDownloaded(profile, temp, item.FileName, overwrite: true);
-                installed.Add(item.Name);
+                var record = await InstallAddonByIdAsync(projectId, cancellationToken);
+                installed.Add(record.Name);
             }
             catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or HttpRequestException)
             {
-                skipped.Add($"{item.Name}: {ex.Message}");
+                skipped.Add($"{projectId}: {ex.Message}");
             }
-            finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
         }
-        StateChanged?.Invoke(this, EventArgs.Empty);
         return new PluginPackResult(installed, skipped);
     }
 

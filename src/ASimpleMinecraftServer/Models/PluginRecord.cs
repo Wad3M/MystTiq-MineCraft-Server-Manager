@@ -30,7 +30,9 @@ public sealed class PluginRecord : INotifyPropertyChanged
     public bool HasDescriptor { get; init; }
     public bool IsReadableJar { get; init; } = true;
     public bool IsDuplicate { get; set; }
-    public string HealthText => !IsReadableJar ? "Malformed JAR" : !HasDescriptor ? "No descriptor" : IsDuplicate ? "Duplicate name" : "Ready";
+    public AddonKind Kind { get; init; }
+    public bool IsClientOnly { get; init; }
+    public string HealthText => !IsReadableJar ? "Malformed JAR" : !HasDescriptor ? "No descriptor" : IsClientOnly ? "Client-only mod" : IsDuplicate ? "Duplicate name" : "Ready";
     public string StatusText => IsEnabled ? "Enabled" : "Disabled";
     public string LatestVersion { get => _latestVersion; set { if (_latestVersion == value) return; _latestVersion = value; OnPropertyChanged(); } }
     public string UpdateStatus { get => _updateStatus; set { if (_updateStatus == value) return; _updateStatus = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasUpdate)); } }
