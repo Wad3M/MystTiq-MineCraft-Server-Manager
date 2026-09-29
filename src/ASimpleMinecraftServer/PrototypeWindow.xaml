@@ -43,11 +43,7 @@
                         <ComboBoxItem Content="Dark" Tag="ModernDark"/>
                         <ComboBoxItem Content="Light" Tag="Light"/>
                         <ComboBoxItem Content="Minecraft Green" Tag="Minecraft" IsSelected="True"/>
-                        <ComboBoxItem Content="Underworld" Tag="Underworld"/>
-                        <ComboBoxItem Content="Ender" Tag="Ender"/>
-                        <ComboBoxItem Content="Aether (Angelic)" Tag="Aether"/>
                     </ComboBox>
-                    <Button Style="{StaticResource SmallButton}" Margin="7,0,0,0" Click="Preview_Click"><TextBlock Text="UI Preview"/></Button>
                 </StackPanel>
                 <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10,6" Margin="6,0,0,0">
                     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>

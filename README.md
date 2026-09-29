@@ -4,7 +4,7 @@ A simple Windows app for creating and running Minecraft servers. The app window 
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.3.0, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.4.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
@@ -47,7 +47,7 @@ If the build fails, run `dotnet --version` in a command prompt. It should print 
 2. Each server needs its own port. Create Server fills in the next free one (25565, 25566, …). For servers you add from an existing folder, set `server-port` in its settings. The app refuses to start a server whose port is already in use.
 3. Start them from the **All Servers** card on the Dashboard, or select one in the server picker and press **Start**.
 
-The server picker at the top chooses which server the toolbar, Console, Players, and Performance pages control. Running servers show a `●` next to their name.
+The server picker at the top chooses which server the toolbar and every page control. Running servers show a `●` next to their name.
 
 Keep an eye on memory. Each server reserves the RAM set in its profile, so three 4 GB servers need at least 12 GB free.
 
@@ -76,7 +76,7 @@ src/ASimpleMinecraftServer/
   Models/                     Data types (ServerProfile, BackupRecord, and so on)
   Themes/                     WPF themes and styles
   Assets/Icons/               MystCraft icon pack (64×64 PNG), mapped in PrototypeWindow.xaml.cs
-  UI/                         Pages, dialogs, navigation
+  UI/Pages/                   Views for server.properties, logs, startup, and optimization
 docs/
   releases/                   Release notes
   icons/                      Icon pack manifest and design spec
@@ -84,8 +84,6 @@ docs/
   RELEASING.md                How to publish a new release
   RELEASE_CHECKLIST.md        Manual test checklist before a release
 ```
-
-`MainWindow.xaml*` is the old v1 window. It is kept for reference and excluded from the build.
 
 ## Versioning
 
@@ -96,9 +94,11 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 ## Roadmap
 
 1. **Crash auto-restart.** The per-server crash recovery settings exist but are not wired up yet.
-2. **Suggest a free port** when creating a new server.
-3. **Tidy up.** Remove the old v1 window and simplify the UI shell.
+2. **Forge and NeoForge** server types, with their mods on the Add-ons page.
+3. **Modpack import** from Modrinth `.mrpack` files.
+4. **"How friends join" card** showing the address and port to share.
+5. **Whitelist** on/off with a player list.
 
 ## Release notes
 
-The latest is [v0.3.0](docs/releases/RELEASE_NOTES_v0.3.0.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.4.0](docs/releases/RELEASE_NOTES_v0.4.0.md). See [`docs/releases/`](docs/releases/) for all versions.

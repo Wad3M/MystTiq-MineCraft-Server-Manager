@@ -28,7 +28,6 @@ public sealed class NativeBackendController : IDisposable
     public ResourcePackService ResourcePacks { get; } = new();
     public ServerTemplateService Templates { get; } = new();
     public PluginPackService PluginPacks { get; } = new();
-    public MigrationService Migration { get; } = new();
     public ScheduledTaskStore ScheduledTasks { get; } = new();
 
     public ServerProfile? SelectedServer => _selectedServer;

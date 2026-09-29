@@ -5,7 +5,7 @@ Test on Windows with the build you are about to release.
 ## Basics
 - [ ] `Build-And-Run.bat` builds and opens the app.
 - [ ] The title bar and About page show the new version.
-- [ ] Every sidebar page opens without an error, and icons display in every theme.
+- [ ] Every sidebar page and every tab opens without an error, and icons display in all three themes.
 
 ## Servers
 - [ ] Create a new server (download a Paper or Vanilla JAR) and add an existing server folder.

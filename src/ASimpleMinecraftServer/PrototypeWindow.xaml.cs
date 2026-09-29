@@ -22,11 +22,21 @@ public partial class PrototypeWindow : Window
     private readonly Dictionary<string, string> _icons = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Dashboard"]="dashboard", ["Create Server"]="create", ["Console"]="console", ["Worlds"]="worlds", ["Players"]="players_nav",
-        ["Add-ons"]="plugins_nav", ["Datapacks"]="datapacks", ["Resource Packs"]="resourcepacks", ["Templates"]="templates", ["Plugin Packs"]="pluginpacks",
-        ["Migration"]="migration", ["Performance"]="performance", ["Health"]="health", ["Log Analyzer"]="loganalyzer", ["Startup Analyzer"]="startup",
-        ["Optimization"]="optimization", ["Scheduler"]="scheduler_nav", ["Auto Backups"]="autobackups", ["Settings"]="settings_nav", ["Help"]="help", ["About"]="about",
-        ["UI Preview"]="settings_top"
+        ["Add-ons"]="plugins_nav", ["Backups"]="autobackups", ["Health"]="health", ["Settings"]="settings_nav", ["Help"]="help"
     };
+
+    // Pages that became tabs of another page. Navigating to one opens its parent on that tab,
+    // so existing Navigate("Datapacks") calls keep working.
+    private static readonly Dictionary<string, (string Page, string Tab)> PageAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Plugin Packs"] = ("Add-ons", "Plugin Packs"), ["Datapacks"] = ("Add-ons", "Datapacks"), ["Resource Packs"] = ("Add-ons", "Resource Pack"),
+        ["Performance"] = ("Health", "Performance"), ["Log Analyzer"] = ("Health", "Logs"), ["Startup Analyzer"] = ("Health", "Startup"), ["Optimization"] = ("Health", "Optimization"),
+        ["Auto Backups"] = ("Backups", "Backups"), ["Scheduler"] = ("Backups", "Scheduled Tasks"),
+        ["Templates"] = ("Settings", "Presets"), ["About"] = ("Help", "Help")
+    };
+    private readonly Dictionary<string, string> _selectedTabs = new(StringComparer.OrdinalIgnoreCase);
+    private string? _activeTab;
+    private TabItem? _activeTabItem;
 
     // Maps UI icon names to files in Assets/Icons (MystCraft icon pack, see docs/icons).
     private static readonly Dictionary<string, string> IconFiles = new(StringComparer.OrdinalIgnoreCase)
@@ -193,11 +203,9 @@ public partial class PrototypeWindow : Window
 
     private void BuildNavigation()
     {
-        AddSection("SERVER MANAGEMENT", ["Worlds", "Players", "Add-ons", "Datapacks", "Resource Packs", "Templates", "Plugin Packs", "Migration"]);
-        AddSection("SERVER TOOLS", ["Performance", "Health", "Log Analyzer", "Startup Analyzer", "Optimization"]);
-        AddSection("AUTOMATION", ["Scheduler", "Auto Backups"]);
-        AddSection("SETTINGS", ["Settings"]);
-        AddSection("HELP & SETUP", ["Help", "About", "UI Preview"]);
+        AddSection("SERVER", ["Players", "Worlds", "Add-ons"]);
+        AddSection("TOOLS", ["Backups", "Health"]);
+        AddSection("APP", ["Settings", "Help"]);
     }
 
     private void AddSection(string title, IEnumerable<string> pages)
@@ -221,6 +229,28 @@ public partial class PrototypeWindow : Window
         NavHost.Children.Add(expander);
     }
 
+    /// <summary>
+    /// Several related tools on one page. Only the selected tab is built (so opening Health doesn't
+    /// run every analyzer), and each page remembers its last tab.
+    /// </summary>
+    private TabControl Tabs(string page, params (string Name, Func<UIElement> Build)[] tabs)
+    {
+        var control = new TabControl { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
+        foreach (var (name, _) in tabs) control.Items.Add(new TabItem { Header = name });
+        control.SelectionChanged += (_, e) =>
+        {
+            if (!ReferenceEquals(e.OriginalSource, control) || control.SelectedItem is not TabItem item) return;
+            var name = (string)item.Header;
+            _selectedTabs[page] = name;
+            _activeTab = name; _activeTabItem = item;
+            try { item.Content = tabs.First(t => t.Name == name).Build(); }
+            catch (Exception ex) { App.WriteStartupLog($"Failed to build tab: {page}/{name}", ex); item.Content = MessagePage(name, ex.Message); }
+        };
+        var wanted = _selectedTabs.TryGetValue(page, out var saved) ? Array.FindIndex(tabs, t => t.Name == saved) : 0;
+        control.SelectedIndex = Math.Max(0, wanted);
+        return control;
+    }
+
     private void Nav_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string page }) Navigate(page);
@@ -228,6 +258,8 @@ public partial class PrototypeWindow : Window
 
     private void Navigate(string page)
     {
+        if (PageAliases.TryGetValue(page, out var alias)) { _selectedTabs[alias.Page] = alias.Tab; page = alias.Page; }
+        _activeTab = null; _activeTabItem = null;
         _currentPage = page;
         PageTitle.Text = page;
         PageSubtitle.Text = SubtitleFor(page);
@@ -243,23 +275,24 @@ public partial class PrototypeWindow : Window
                 "Console" => BuildConsolePage(),
                 "Worlds" => BuildWorldsPage(),
                 "Players" => BuildPlayersPage(),
-                "Add-ons" => BuildAddonsPage(),
-                "Datapacks" => BuildDatapacksPage(),
-                "Resource Packs" => BuildResourcePacksPage(),
-                "Templates" => BuildTemplatesPage(),
-                "Plugin Packs" => BuildPluginPacksPage(),
-                "Migration" => BuildMigrationPage(),
-                "Performance" => BuildPerformancePage(),
-                "Health" => BuildHealthPage(),
-                "Log Analyzer" => BuildLogAnalyzerPage(),
-                "Startup Analyzer" => BuildStartupAnalyzerPage(),
-                "Optimization" => BuildOptimizationPage(),
-                "Scheduler" => BuildSchedulerPage(),
-                "Auto Backups" => BuildBackupsPage(),
-                "Settings" => BuildSettingsPage(),
+                "Add-ons" => Tabs("Add-ons",
+                    ("Add-ons", BuildAddonsPage),
+                    ("Plugin Packs", BuildPluginPacksPage),
+                    ("Datapacks", BuildDatapacksPage),
+                    ("Resource Pack", BuildResourcePacksPage)),
+                "Backups" => Tabs("Backups",
+                    ("Backups", BuildBackupsPage),
+                    ("Scheduled Tasks", BuildSchedulerPage)),
+                "Health" => Tabs("Health",
+                    ("Health", BuildHealthPage),
+                    ("Performance", BuildPerformancePage),
+                    ("Logs", BuildLogAnalyzerPage),
+                    ("Startup", BuildStartupAnalyzerPage),
+                    ("Optimization", BuildOptimizationPage)),
+                "Settings" => Tabs("Settings",
+                    ("Server", BuildSettingsPage),
+                    ("Presets", BuildTemplatesPage)),
                 "Help" => BuildHelpPage(),
-                "About" => BuildAboutPage(),
-                "UI Preview" => BuildPreviewPage(),
                 _ => MessagePage(page, "This page is not available.")
             };
             PrototypeStatus.Text = $"MystMC v{AppVersion} — {page}";
@@ -857,22 +890,6 @@ public partial class PrototypeWindow : Window
         return root;
     }
 
-    private UIElement BuildMigrationPage()
-    {
-        if (_backend is null) return MessagePage("Migration", "Backend is not initialized.");
-        var card = Card(); card.Padding = new Thickness(16); var stack = new StackPanel(); stack.Children.Add(TitleRow("migration", "Server Migration"));
-        var source = new TextBox { Text = _backend.SelectedServer?.Folder ?? string.Empty, Margin = new Thickness(0, 3, 0, 8) };
-        var destination = new TextBox { Margin = new Thickness(0, 3, 0, 8) };
-        var worlds = new CheckBox { Content = "Copy worlds", IsChecked = true }; var plugins = new CheckBox { Content = "Copy plugins", IsChecked = true }; var config = new CheckBox { Content = "Copy configuration", IsChecked = true };
-        stack.Children.Add(new TextBlock { Text = "Source folder" }); stack.Children.Add(source); stack.Children.Add(new TextBlock { Text = "Destination folder" }); stack.Children.Add(destination); stack.Children.Add(worlds); stack.Children.Add(plugins); stack.Children.Add(config);
-        var buttons = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-        buttons.Children.Add(ActionButton("Browse Source…", (_, _) => { var d = PickFolder(source.Text); if (d is not null) source.Text = d; }));
-        buttons.Children.Add(ActionButton("Browse Destination…", (_, _) => { var d = PickFolder(destination.Text); if (d is not null) destination.Text = d; }));
-        buttons.Children.Add(ActionButton("Preview", (_, _) => { var plan = new MigrationPlan(source.Text, destination.Text, worlds.IsChecked == true, plugins.IsChecked == true, config.IsChecked == true); var errors = _backend.Migration.Validate(plan); if (errors.Count > 0) { MessageBox.Show(string.Join(Environment.NewLine, errors), "Migration"); return; } MessageBox.Show(string.Join(Environment.NewLine, _backend.Migration.Preview(plan)) + $"\n\nEstimated source data: {FormatBytes(_backend.Migration.EstimateBytes(plan))}", "Migration Preview"); }));
-        buttons.Children.Add(ActionButton("Migrate", (_, _) => { var plan = new MigrationPlan(source.Text, destination.Text, worlds.IsChecked == true, plugins.IsChecked == true, config.IsChecked == true); if (!Confirm("Copy the selected server data to the destination folder?")) return; _backend.Migration.Execute(plan); MessageBox.Show("Migration completed.", "Migration"); }, "GreenActionButton"));
-        stack.Children.Add(buttons); card.Child = stack; return card;
-    }
-
     private UIElement BuildPerformancePage()
     {
         if (_backend is null) return MessagePage("Performance", "Backend is not initialized.");
@@ -960,30 +977,10 @@ public partial class PrototypeWindow : Window
     private UIElement BuildHelpPage()
     {
         var root = new StackPanel();
+        root.Children.Add(TextCard("about", $"MystTiq Minecraft Server Manager v{AppVersion}", ["A simple Windows app for creating and running several Minecraft servers side by side.", "Source, releases, and release notes: github.com/Wad3M/MystTiq-MineCraft-Server-Manager"]));
         root.Children.Add(TextCard("help", "Getting Started", ["1. Create or import a server profile.", "2. Select the server in the header.", "3. Verify Java and the configured server JAR in Settings.", "4. Start the server and use Console for live output.", "5. Configure automatic backups before major changes."]));
-        root.Children.Add(TextCard("health", "Troubleshooting", ["Startup problems: open Health and Log Analyzer.", "Java errors: verify the Java executable and Minecraft version requirements.", "Recovered process: MystMC can monitor/kill it but cannot reconnect stdin/stdout.", "TPS/MSPT: use Spark or Paper timings; MystMC intentionally does not fabricate these metrics."]));
+        root.Children.Add(TextCard("health", "Troubleshooting", ["Startup problems: open Health, then the Logs and Startup tabs.", "Java errors: verify the Java executable and Minecraft version requirements.", "Recovered process: MystMC can monitor/kill it but cannot reconnect stdin/stdout.", "TPS/MSPT: use Spark or Paper timings; MystMC intentionally does not fabricate these metrics."]));
         return root;
-    }
-
-    private UIElement BuildAboutPage()
-    {
-        return MessagePage($"MystMC v{AppVersion}", "MystTiq Minecraft Server Manager\n\nA simple Windows app for creating and running several Minecraft servers side by side.\n\nSource and release notes: https://github.com/Wad3M/MystTiq-MineCraft-Server-Manager");
-    }
-
-    private UIElement BuildPreviewPage()
-    {
-        var root = new StackPanel();
-        var top = new UniformGrid { Columns = 3 };
-        top.Children.Add(PrototypeModule("Theme Preview", "Switch themes live from the toolbar. The selected theme is remembered.", ["Dark", "Light", "Minecraft Green", "Underworld", "Ender", "Aether"]));
-        top.Children.Add(PrototypeModule("Responsive Layout", "Resize the window and collapse the sidebar to test the v1.8.8 shell.", ["Collapse Sidebar", "Compact", "Comfortable"]));
-        top.Children.Add(PrototypeModule("Native Backend", "The production shell no longer instantiates the legacy MainWindow.", ["Dashboard", "Console", "Health"]));
-        root.Children.Add(top);
-        var card = Card(); card.Margin = new Thickness(0, 8, 0, 0); card.Padding = new Thickness(14);
-        var stack = new StackPanel(); stack.Children.Add(TitleRow("settings_top", "MystUI Controls"));
-        var wrap = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-        foreach (var label in new[] { "Primary Button", "Secondary Button", "Danger Action", "Disabled" }) { var b = new Button { Content = label, Style = (Style)FindResource("SmallButton"), Margin = new Thickness(0, 0, 7, 7), IsEnabled = label != "Disabled" }; wrap.Children.Add(b); }
-        wrap.Children.Add(new CheckBox { Content = "Toggle Option", IsChecked = true, Margin = new Thickness(6, 5, 12, 0) });
-        stack.Children.Add(wrap); card.Child = stack; root.Children.Add(card); return root;
     }
 
     private async void ToolbarAction_Click(object sender, RoutedEventArgs e)
@@ -1054,7 +1051,7 @@ public partial class PrototypeWindow : Window
         UpdateCpuSample();
         RefreshShellStatus();
         if (_currentPage == "Dashboard") PageContent.Content = BuildDashboard();
-        else if (_currentPage == "Performance") PageContent.Content = BuildPerformancePage();
+        else if (_activeTab == "Performance" && _activeTabItem is not null) _activeTabItem.Content = BuildPerformancePage();
 
         if (!_maintenanceBusy && _backend is not null && DateTimeOffset.Now - _lastMaintenanceCheck >= TimeSpan.FromMinutes(1))
         {
@@ -1203,25 +1200,18 @@ public partial class PrototypeWindow : Window
 
     private static string SubtitleFor(string page) => page switch
     {
-        "Dashboard" => "Live overview of your selected and running Minecraft server",
-        "Create Server" => "Create a profile or add an existing Minecraft server",
-        "Console" => "Live output from the Java process and command input",
-        "Datapacks" => "Install and manage world datapacks",
-        "Resource Packs" => "Validate and configure the server resource pack",
-        "Templates" => "Apply curated server.properties templates",
-        "Plugin Packs" => "Curated groups of compatible server plugins",
-        "Add-ons" => "Plugins for Paper, Purpur and Folia, or mods for Fabric",
-        "Performance" => "Process metrics and server performance guidance",
-        "UI Preview" => "Theme, controls, icons, spacing, and responsive testing",
-        _ => $"{page} management"
+        "Dashboard" => "All your servers at a glance",
+        "Create Server" => "Install a new server or add an existing one",
+        "Console" => "Live output and commands for the selected server",
+        "Players" => "Who's online, with op, kick, and ban",
+        "Worlds" => "Import, rename, archive, and delete worlds",
+        "Add-ons" => "Plugins or mods, plugin packs, datapacks, and the resource pack",
+        "Backups" => "Manual and automatic backups, and scheduled tasks",
+        "Health" => "Health checks, performance, logs, startup, and optimization",
+        "Settings" => "Server profile, server.properties, and presets",
+        "Help" => "Getting started and troubleshooting",
+        _ => page
     };
-
-    private Border PrototypeModule(string title, string description, IEnumerable<string> actions)
-    {
-        var card = Card(); card.Margin = new Thickness(0, 0, 7, 0); card.Padding = new Thickness(12);
-        var stack = new StackPanel(); stack.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold }); stack.Children.Add(new TextBlock { Text = description, Foreground = (Brush)FindResource("MutedTextBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 12) });
-        var buttons = new WrapPanel(); foreach (var action in actions) { var b = ActionButton(action, (_, _) => PrototypeStatus.Text = action); buttons.Children.Add(b); } stack.Children.Add(buttons); card.Child = stack; return card;
-    }
 
     private Border Metric(string icon, string title, string value, string subtitle, double progress)
     {
@@ -1339,8 +1329,6 @@ public partial class PrototypeWindow : Window
         }
     }
 
-    private void Preview_Click(object sender, RoutedEventArgs e) => Navigate("UI Preview");
-
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
     {
         _sidebarCollapsed = !_sidebarCollapsed;
@@ -1365,7 +1353,7 @@ public partial class PrototypeWindow : Window
     private void ApplyTheme(string theme, bool save)
     {
         var dictionaries = Application.Current.Resources.MergedDictionaries;
-        var themeFiles = new[] { "Minecraft.xaml", "ModernDark.xaml", "Light.xaml", "Underworld.xaml", "Ender.xaml", "Aether.xaml" };
+        var themeFiles = new[] { "Minecraft.xaml", "ModernDark.xaml", "Light.xaml" };
         var old = dictionaries.FirstOrDefault(d => d.Source is not null && themeFiles.Any(file => d.Source.OriginalString.EndsWith($"Themes/{file}", StringComparison.OrdinalIgnoreCase)));
         if (old is not null) dictionaries.Remove(old);
         dictionaries.Insert(0, new ResourceDictionary { Source = new Uri($"Themes/{theme}.xaml", UriKind.Relative) });

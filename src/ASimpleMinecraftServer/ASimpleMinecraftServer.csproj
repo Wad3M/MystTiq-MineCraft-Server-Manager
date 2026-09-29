@@ -9,9 +9,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>ASimpleMinecraftServer</AssemblyName>
     <RootNamespace>ASimpleMinecraftServer</RootNamespace>
-    <Version>0.3.0</Version>
-    <FileVersion>0.3.0.0</FileVersion>
-    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <Version>0.4.0</Version>
+    <FileVersion>0.4.0.0</FileVersion>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>
@@ -20,16 +20,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
-    <Resource Include="Assets\brand.png" />
-    <Resource Include="Assets\dashboard-landscape.png" />
-    <Resource Include="Assets\sidebar-hero.png" />
     <Resource Include="Assets\Icons\*.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- v2.1.3: the legacy MainWindow is retained in source history only.
-         It is excluded from compilation so the polished shell owns the app natively. -->
-    <Compile Remove="MainWindow.xaml.cs" />
-    <Compile Remove="MainWindow.ExternalHost.cs" />
-    <Page Remove="MainWindow.xaml" />
   </ItemGroup>
 </Project>
