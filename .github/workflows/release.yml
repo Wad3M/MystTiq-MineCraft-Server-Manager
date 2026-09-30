@@ -10,12 +10,16 @@ on:
 
 permissions:
   contents: write
+  actions: read   # lets SignPath fetch the unsigned build artifact
 
 jobs:
   release:
     runs-on: windows-latest
     env:
       PROJECT: src/ASimpleMinecraftServer/ASimpleMinecraftServer.csproj
+      # Code signing through SignPath Foundation runs only once the API token secret and the
+      # organization id variable are set in the repository (Settings > Secrets and variables > Actions).
+      SIGNING_ENABLED: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -36,6 +40,45 @@ jobs:
 
       - name: Publish Windows x64
         run: dotnet publish ${{ env.PROJECT }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -warnaserror -o publish
+
+      - name: Signing status
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_ENABLED -eq 'true') { "Code signing is enabled (SignPath)." }
+          else { "::notice::Code signing is not configured yet (missing SIGNPATH_API_TOKEN secret or SIGNPATH_ORGANIZATION_ID variable). This release will be unsigned." }
+
+      - name: Upload unsigned build for signing
+        id: unsigned
+        if: env.SIGNING_ENABLED == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-exe
+          path: publish/ASimpleMinecraftServer.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: env.SIGNING_ENABLED == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Use and verify signed build
+        if: env.SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem signed -Recurse -Filter ASimpleMinecraftServer.exe | Select-Object -First 1
+          if (-not $signed) { throw "SignPath did not return ASimpleMinecraftServer.exe." }
+          $signature = Get-AuthenticodeSignature $signed.FullName
+          if ($signature.Status -ne 'Valid') { throw "Signature check failed: $($signature.Status) $($signature.StatusMessage)" }
+          "Signed by: $($signature.SignerCertificate.Subject)"
+          Copy-Item $signed.FullName publish/ASimpleMinecraftServer.exe -Force
 
       - name: Package
         shell: pwsh
