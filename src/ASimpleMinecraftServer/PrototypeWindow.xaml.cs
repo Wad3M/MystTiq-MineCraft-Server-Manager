@@ -74,15 +74,16 @@ public partial class PrototypeWindow : Window
     public PrototypeWindow()
     {
         InitializeComponent();
-        Title = $"MystMC v{AppVersion}";
-        PrototypeStatus.Text = $"MystMC v{AppVersion} — Ready";
+        Title = $"MystTiq MineCraft Server Manager v{AppVersion}";
+        BannerVersionText.Text = $"v{AppVersion}";
+        PrototypeStatus.Text = $"v{AppVersion} — Ready";
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         try
         {
-            App.WriteStartupLog($"MystMC v{AppVersion} shell loaded; initializing native backend services.");
+            App.WriteStartupLog($"MystTiq v{AppVersion} shell loaded; initializing native backend services.");
             BuildToolbar();
             BuildNavigation();
             RestoreTheme();
@@ -133,13 +134,13 @@ public partial class PrototypeWindow : Window
         var runningNames = string.Join(", ", running.Select(p => p.Name));
         var answer = MessageBox.Show(
             running.Count == 1
-                ? $"{runningNames} is still running.\n\nStop it safely and exit MystMC?"
-                : $"{running.Count} servers are still running: {runningNames}.\n\nStop them all safely and exit MystMC?",
+                ? $"{runningNames} is still running.\n\nStop it safely and exit MystTiq?"
+                : $"{running.Count} servers are still running: {runningNames}.\n\nStop them all safely and exit MystTiq?",
             "Servers are running", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
         if (answer == MessageBoxResult.Cancel) return;
         if (answer == MessageBoxResult.No)
         {
-            MessageBox.Show("MystMC cannot exit while it owns running Java processes. Stop the servers first, or use Kill if absolutely necessary.", "MystMC", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("MystTiq cannot exit while it owns running Java processes. Stop the servers first, or use Kill if absolutely necessary.", "MystTiq", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -159,7 +160,7 @@ public partial class PrototypeWindow : Window
         }
         catch (Exception ex)
         {
-            ShowError("Could not close MystMC safely", ex);
+            ShowError("Could not close MystTiq safely", ex);
         }
     }
 
@@ -177,12 +178,12 @@ public partial class PrototypeWindow : Window
 
     private void ShowStartupFailure(Exception ex)
     {
-        PrototypeStatus.Text = "Native backend initialization failed — see MystMC_startup.log";
+        PrototypeStatus.Text = "Native backend initialization failed — see MystTiq_startup.log";
         ServerStatusText.Text = "Startup Error";
         ServerDetailText.Text = ex.Message;
         PageTitle.Text = "Startup Error";
         PageSubtitle.Text = "The shell stayed open so the failure can be diagnosed.";
-        PageContent.Content = MessagePage("MystMC could not initialize its native backend services.", ex.Message + "\n\nSee MystMC_startup.log beside the executable for full details.");
+        PageContent.Content = MessagePage("MystTiq could not initialize its native backend services.", ex.Message + "\n\nSee MystTiq_startup.log beside the executable for full details.");
     }
 
     private void BuildToolbar()
@@ -295,7 +296,7 @@ public partial class PrototypeWindow : Window
                 "Help" => BuildHelpPage(),
                 _ => MessagePage(page, "This page is not available.")
             };
-            PrototypeStatus.Text = $"MystMC v{AppVersion} — {page}";
+            PrototypeStatus.Text = $"v{AppVersion} — {page}";
         }
         catch (Exception ex)
         {
@@ -333,7 +334,7 @@ public partial class PrototypeWindow : Window
         var memoryMb = GetMemoryMb();
         var allocatedMb = (_backend.SelectedServer?.MemoryGb ?? 0) * 1024d;
         metrics.Children.Add(Metric("memory", "MEMORY USAGE", _backend.IsRunning ? $"{memoryMb:N0} MB" : "—", allocatedMb > 0 ? $"Configured {allocatedMb / 1024:N0} GB" : "", allocatedMb > 0 ? Math.Min(100, memoryMb * 100 / allocatedMb) : 0));
-        metrics.Children.Add(Metric("clock", "UPTIME", _backend.IsRunning ? FormatDuration(_backend.Uptime) : "—", _backend.IsRecoveredProcess ? "Recovered process" : "Managed by MystMC", _backend.IsRunning ? 100 : 0));
+        metrics.Children.Add(Metric("clock", "UPTIME", _backend.IsRunning ? FormatDuration(_backend.Uptime) : "—", _backend.IsRecoveredProcess ? "Recovered process" : "Managed by MystTiq", _backend.IsRunning ? 100 : 0));
         root.Children.Add(metrics);
 
         var grid = new Grid();
@@ -435,7 +436,7 @@ public partial class PrototypeWindow : Window
             MessageBox.Show(this, $"{result.Message}\n\nInstall Java {result.RequiredMajorVersion} (for example from adoptium.net), or set the Java path in this server's Settings.", "Java not found", MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
-        // Versions MystMC cannot read (custom or imported servers) are only checked for a working Java.
+        // Versions MystTiq cannot read (custom or imported servers) are only checked for a working Java.
         if (!System.Text.RegularExpressions.Regex.IsMatch(profile.Version ?? string.Empty, @"^\d+\.\d+")) return true;
         return MessageBox.Show(this, $"{result.Message}\n\nThe server will most likely fail to start. Start anyway?", "Java version", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
     }
@@ -456,7 +457,7 @@ public partial class PrototypeWindow : Window
         var rootPanel = new StackPanel();
         var import = Card(); import.Padding = new Thickness(16); import.Margin = new Thickness(0, 0, 0, 8);
         var importStack = new StackPanel(); importStack.Children.Add(TitleRow("create", "Add an Existing Minecraft Server"));
-        importStack.Children.Add(new TextBlock { Text = "Select an existing server folder. MystMC will detect its server JAR and add it to the server list without changing the server files.", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedTextBrush"), Margin = new Thickness(0, 0, 0, 10) });
+        importStack.Children.Add(new TextBlock { Text = "Select an existing server folder. MystTiq will detect its server JAR and add it to the server list without changing the server files.", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedTextBrush"), Margin = new Thickness(0, 0, 0, 10) });
         importStack.Children.Add(ActionButton("Browse Existing Server…", (_, _) => ImportExistingServer()));
         import.Child = importStack; rootPanel.Children.Add(import);
 
@@ -465,7 +466,7 @@ public partial class PrototypeWindow : Window
         outer.Children.Add(TitleRow("server", "Install a New Minecraft Server"));
         outer.Children.Add(new TextBlock
         {
-            Text = "Choose a server implementation and Minecraft version. MystMC will download the correct server JAR, create the folder and server.properties, and add the new server profile.",
+            Text = "Choose a server implementation and Minecraft version. MystTiq will download the correct server JAR, create the folder and server.properties, and add the new server profile.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)FindResource("MutedTextBrush"),
             Margin = new Thickness(0, 0, 0, 12)
@@ -563,7 +564,7 @@ public partial class PrototypeWindow : Window
             {
                 version.ItemsSource = null;
                 version.Text = string.Empty;
-                status.Text = "Choose the custom server JAR you want MystMC to copy into the new server folder.";
+                status.Text = "Choose the custom server JAR you want MystTiq to copy into the new server folder.";
                 return;
             }
 
@@ -653,7 +654,7 @@ public partial class PrototypeWindow : Window
 
                 ServerPicker.SelectedItem = profile;
                 status.Text = $"Installed {profile.Type} {profile.Version} successfully in {profile.Folder}.";
-                MessageBox.Show($"Server installed successfully.\n\n{profile.Name}\n{profile.Type} {profile.Version}\n{profile.Folder}", "MystMC", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"Server installed successfully.\n\n{profile.Name}\n{profile.Type} {profile.Version}\n{profile.Folder}", "MystTiq", MessageBoxButton.OK, MessageBoxImage.Information);
                 Navigate("Dashboard");
             }
             catch (Exception ex)
@@ -719,7 +720,7 @@ public partial class PrototypeWindow : Window
     {
         if (_backend is null) return MessagePage("Players", "Backend is not initialized.");
         var stack = new StackPanel();
-        var info = Card(); info.Padding = new Thickness(12); info.Margin = new Thickness(0, 0, 0, 8); info.Child = new TextBlock { Text = _backend.IsRecoveredProcess ? "Recovered server: player commands are unavailable until MystMC launches the server itself." : "Live player list. Refresh sends Minecraft's list command.", TextWrapping = TextWrapping.Wrap }; stack.Children.Add(info);
+        var info = Card(); info.Padding = new Thickness(12); info.Margin = new Thickness(0, 0, 0, 8); info.Child = new TextBlock { Text = _backend.IsRecoveredProcess ? "Recovered server: player commands are unavailable until MystTiq launches the server itself." : "Live player list. Refresh sends Minecraft's list command.", TextWrapping = TextWrapping.Wrap }; stack.Children.Add(info);
         _playersList = new ListBox { ItemsSource = _backend.OnlinePlayers.ToList(), MinHeight = 300 };
         stack.Children.Add(_playersList);
         var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
@@ -882,7 +883,7 @@ public partial class PrototypeWindow : Window
         var packs = _backend.PluginPacks.GetBuiltInPacks(); var root = new StackPanel(); var grid = DataGridFor(packs, 280); root.Children.Add(grid);
         var preview = new TextBox { IsReadOnly = true, AcceptsReturn = true, MinHeight = 150, Margin = new Thickness(0, 8, 0, 0), FontFamily = new FontFamily("Consolas") }; root.Children.Add(preview);
         grid.SelectionChanged += (_, _) => { if (grid.SelectedItem is PluginPack p) preview.Text = _backend.PluginPacks.Preview(p); };
-        var note = Card(); note.Padding = new Thickness(12); note.Margin = new Thickness(0, 8, 0, 0); note.Child = new TextBlock { Text = "Plugin Packs are curated Modrinth project groups. MystMC resolves a compatible release for the selected Minecraft version and installs each JAR into the server's plugins folder.", TextWrapping = TextWrapping.Wrap }; root.Children.Add(note);
+        var note = Card(); note.Padding = new Thickness(12); note.Margin = new Thickness(0, 8, 0, 0); note.Child = new TextBlock { Text = "Plugin Packs are curated Modrinth project groups. MystTiq resolves a compatible release for the selected Minecraft version and installs each JAR into the server's plugins folder.", TextWrapping = TextWrapping.Wrap }; root.Children.Add(note);
         var actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         actions.Children.Add(ActionButton("Install Selected Pack", async (_, _) => { if (grid.SelectedItem is not PluginPack pack) { MessageBox.Show("Select a plugin pack first."); return; } try { var result = await _backend.InstallPluginPackAsync(pack); var message = $"Installed {result.Installed.Count} plugin(s):\n" + string.Join("\n", result.Installed); if (result.Skipped.Count > 0) message += $"\n\nSkipped {result.Skipped.Count}:\n" + string.Join("\n", result.Skipped); MessageBox.Show(message, "Plugin Pack"); Navigate("Add-ons"); } catch (Exception ex) { ShowError("Plugin pack installation failed", ex); } }, "GreenActionButton"));
         actions.Children.Add(ActionButton("Open Add-ons", (_, _) => Navigate("Add-ons")));
@@ -900,7 +901,7 @@ public partial class PrototypeWindow : Window
         metrics.Children.Add(Metric("clock", "UPTIME", _backend.IsRunning ? FormatDuration(_backend.Uptime) : "—", _backend.IsRecoveredProcess ? "Recovered" : "Managed", _backend.IsRunning ? 100 : 0));
         metrics.Children.Add(Metric("plugins_nav", "PLUGINS", _backend.SelectedServer is null ? "—" : Safe(() => _backend.Plugins.List(_backend.SelectedServer).Count, 0).ToString(), _backend.SelectedServer?.Type ?? "", 0));
         root.Children.Add(metrics);
-        var info = Card(); info.Padding = new Thickness(14); info.Margin = new Thickness(0, 8, 0, 0); info.Child = new TextBlock { Text = "MystMC reports process CPU, working set, uptime, and local configuration. Authoritative TPS/MSPT requires server-side telemetry such as Spark or Paper timings; MystMC does not invent those values.", TextWrapping = TextWrapping.Wrap }; root.Children.Add(info);
+        var info = Card(); info.Padding = new Thickness(14); info.Margin = new Thickness(0, 8, 0, 0); info.Child = new TextBlock { Text = "MystTiq reports process CPU, working set, uptime, and local configuration. Authoritative TPS/MSPT requires server-side telemetry such as Spark or Paper timings; MystTiq does not invent those values.", TextWrapping = TextWrapping.Wrap }; root.Children.Add(info);
         return root;
     }
 
@@ -979,7 +980,7 @@ public partial class PrototypeWindow : Window
         var root = new StackPanel();
         root.Children.Add(TextCard("about", $"MystTiq Minecraft Server Manager v{AppVersion}", ["A simple Windows app for creating and running several Minecraft servers side by side.", "Source, releases, and release notes: github.com/Wad3M/MystTiq-MineCraft-Server-Manager"]));
         root.Children.Add(TextCard("help", "Getting Started", ["1. Create or import a server profile.", "2. Select the server in the header.", "3. Verify Java and the configured server JAR in Settings.", "4. Start the server and use Console for live output.", "5. Configure automatic backups before major changes."]));
-        root.Children.Add(TextCard("health", "Troubleshooting", ["Startup problems: open Health, then the Logs and Startup tabs.", "Java errors: verify the Java executable and Minecraft version requirements.", "Recovered process: MystMC can monitor/kill it but cannot reconnect stdin/stdout.", "TPS/MSPT: use Spark or Paper timings; MystMC intentionally does not fabricate these metrics."]));
+        root.Children.Add(TextCard("health", "Troubleshooting", ["Startup problems: open Health, then the Logs and Startup tabs.", "Java errors: verify the Java executable and Minecraft version requirements.", "Recovered process: MystTiq can monitor/kill it but cannot reconnect stdin/stdout.", "TPS/MSPT: use Spark or Paper timings; MystTiq intentionally does not fabricate these metrics."]));
         return root;
     }
 
@@ -1300,7 +1301,7 @@ public partial class PrototypeWindow : Window
         catch (Exception ex) { ShowError("Could not open folder", ex); }
     }
 
-    private bool Confirm(string message) => MessageBox.Show(this, message, "MystMC", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    private bool Confirm(string message) => MessageBox.Show(this, message, "MystTiq", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
 
     private string? Prompt(string title, string label, string initial)
     {

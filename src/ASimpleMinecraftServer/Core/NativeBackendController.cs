@@ -137,9 +137,9 @@ public sealed class NativeBackendController : IDisposable
         if (string.IsNullOrWhiteSpace(name)) throw new InvalidOperationException("Enter a server name.");
         if (string.IsNullOrWhiteSpace(folder)) throw new InvalidOperationException("Choose an install folder.");
         if (Servers.Any(server => string.Equals(server.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException("A MystMC server profile with this name already exists.");
+            throw new InvalidOperationException("A MystTiq server profile with this name already exists.");
         if (Servers.Any(server => PathsEqual(server.Folder, folder)))
-            throw new InvalidOperationException("A MystMC server profile already uses this folder.");
+            throw new InvalidOperationException("A MystTiq server profile already uses this folder.");
         var portOwner = Servers.FirstOrDefault(server => server.Port == port);
         if (portOwner is not null)
             throw new InvalidOperationException($"Port {port} is already used by '{portOwner.Name}'. Try port {SuggestFreePort()}.");
@@ -304,7 +304,7 @@ public sealed class NativeBackendController : IDisposable
     {
         var instance = GetInstance(profile);
         if (!instance.CanSendCommands) throw new InvalidOperationException(instance.IsRecoveredProcess
-            ? "Commands are unavailable because MystMC recovered an already-running Java process."
+            ? "Commands are unavailable because MystTiq recovered an already-running Java process."
             : $"{profile.Name} is not running.");
         if (string.IsNullOrWhiteSpace(command)) return;
         instance.AddConsole("> " + command.Trim());
@@ -369,7 +369,7 @@ public sealed class NativeBackendController : IDisposable
         await _pluginCatalog.ResolveInstallAsync(item, profile.Version, kind, cancellationToken);
         if (!item.CanInstall || string.IsNullOrWhiteSpace(item.FileName))
             throw new InvalidOperationException($"{item.Name} has no {profile.Type} build for Minecraft {profile.Version}.");
-        var temp = Path.Combine(Path.GetTempPath(), "MystMC-" + Guid.NewGuid().ToString("N") + ".jar");
+        var temp = Path.Combine(Path.GetTempPath(), "MystTiq-" + Guid.NewGuid().ToString("N") + ".jar");
         try
         {
             await _pluginCatalog.DownloadAsync(item, temp, cancellationToken);
@@ -396,7 +396,7 @@ public sealed class NativeBackendController : IDisposable
         if (kind == AddonKind.None)
             throw new InvalidOperationException($"{profile.Type} servers don't support plugins or mods. Create a Paper, Purpur, Folia, or Fabric server to use add-ons.");
         if (string.IsNullOrWhiteSpace(profile.Version) || profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Set this server's Minecraft version in Settings first, so MystMC can pick compatible add-ons.");
+            throw new InvalidOperationException("Set this server's Minecraft version in Settings first, so MystTiq can pick compatible add-ons.");
         return (profile, kind);
     }
 
@@ -527,7 +527,7 @@ public sealed class NativeBackendController : IDisposable
     }
 
     /// <summary>
-    /// Refuses to start a server whose port is already used by another MystMC server
+    /// Refuses to start a server whose port is already used by another MystTiq server
     /// or by any other program listening on this machine.
     /// </summary>
     private void EnsurePortAvailable(ServerProfile profile)

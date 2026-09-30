@@ -6,7 +6,7 @@ namespace ASimpleMinecraftServer.Core;
 public sealed record RuntimeSession(int ProcessId, string ServerFolder, DateTimeOffset StartedAt);
 
 /// <summary>
-/// Remembers which Java processes MystMC started, one entry per running server,
+/// Remembers which Java processes MystTiq started, one entry per running server,
 /// so they can be reattached if the app is closed or crashes while servers keep running.
 /// </summary>
 public sealed class RuntimeSessionStore

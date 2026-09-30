@@ -8,7 +8,7 @@ namespace ASimpleMinecraftServer;
 
 public partial class App : Application
 {
-    private static string StartupLogPath => Path.Combine(AppContext.BaseDirectory, "MystMC_startup.log");
+    private static string StartupLogPath => Path.Combine(AppContext.BaseDirectory, "MystTiq_startup.log");
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -18,20 +18,20 @@ public partial class App : Application
 
         try
         {
-            WriteStartupLog("MystMC application startup beginning.");
+            WriteStartupLog("MystTiq application startup beginning.");
             base.OnStartup(e);
 
             var shell = new PrototypeWindow();
             MainWindow = shell;
             shell.Show();
-            WriteStartupLog("MystMC polished shell displayed.");
+            WriteStartupLog("MystTiq polished shell displayed.");
         }
         catch (Exception ex)
         {
             WriteStartupLog("FATAL startup exception", ex);
             MessageBox.Show(
-                $"MystMC could not start.\n\n{ex.Message}\n\nDetails were written to:\n{StartupLogPath}",
-                "MystMC startup error",
+                $"MystTiq could not start.\n\n{ex.Message}\n\nDetails were written to:\n{StartupLogPath}",
+                "MystTiq startup error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(-1);
@@ -42,8 +42,8 @@ public partial class App : Application
     {
         WriteStartupLog("Unhandled UI exception", e.Exception);
         MessageBox.Show(
-            $"MystMC encountered an unexpected error but will remain open when possible.\n\n{e.Exception.Message}\n\nDetails were written to:\n{StartupLogPath}",
-            "MystMC error",
+            $"MystTiq encountered an unexpected error but will remain open when possible.\n\n{e.Exception.Message}\n\nDetails were written to:\n{StartupLogPath}",
+            "MystTiq error",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
         e.Handled = true;
