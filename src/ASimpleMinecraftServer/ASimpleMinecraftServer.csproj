@@ -9,9 +9,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>ASimpleMinecraftServer</AssemblyName>
     <RootNamespace>ASimpleMinecraftServer</RootNamespace>
-    <Version>0.4.1</Version>
-    <FileVersion>0.4.1.0</FileVersion>
-    <AssemblyVersion>0.4.1.0</AssemblyVersion>
+    <Version>0.4.2</Version>
+    <FileVersion>0.4.2.0</FileVersion>
+    <AssemblyVersion>0.4.2.0</AssemblyVersion>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>

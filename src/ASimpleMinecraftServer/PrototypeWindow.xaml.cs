@@ -57,6 +57,9 @@ public partial class PrototypeWindow : Window
     private readonly Dictionary<string, Button> _toolbarButtons = new(StringComparer.OrdinalIgnoreCase);
     private DispatcherTimer? _statusTimer;
     private bool _sidebarCollapsed;
+    // Sidebar pieces the collapse toggle switches between "icon + label" and "icon only".
+    private readonly List<(Button Button, FrameworkElement Icon, TextBlock Label)> _navItems = new();
+    private readonly List<(Expander Section, string Title)> _navSections = new();
     private bool _allowClose;
     private bool _updatingServerPicker;
     private string _currentPage = "Dashboard";
@@ -214,13 +217,16 @@ public partial class PrototypeWindow : Window
         var panel = new StackPanel();
         foreach (var page in pages)
         {
-            var button = new Button { Style = (Style)FindResource("NavButton"), Tag = page };
+            var button = new Button { Style = (Style)FindResource("NavButton"), Tag = page, ToolTip = page };
             button.Click += Nav_Click;
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(CreateIcon(_icons[page], 27, new Thickness(0, 0, 10, 0)));
-            row.Children.Add(new TextBlock { Text = page, VerticalAlignment = VerticalAlignment.Center });
+            var icon = CreateIcon(_icons[page], 27, new Thickness(0, 0, 10, 0));
+            var label = new TextBlock { Text = page, VerticalAlignment = VerticalAlignment.Center };
+            row.Children.Add(icon);
+            row.Children.Add(label);
             button.Content = row;
             panel.Children.Add(button);
+            _navItems.Add((button, icon, label));
         }
         var expander = new Expander
         {
@@ -228,6 +234,7 @@ public partial class PrototypeWindow : Window
             Foreground = (Brush)FindResource("AccentBrush"), FontSize = 9, Margin = new Thickness(2, 4, 0, 0)
         };
         NavHost.Children.Add(expander);
+        _navSections.Add((expander, title));
     }
 
     /// <summary>
@@ -1330,19 +1337,47 @@ public partial class PrototypeWindow : Window
         }
     }
 
+    /// <summary>
+    /// Collapses the sidebar to an icon rail: every page keeps its icon (centred, with the
+    /// page name as a tooltip) and only the labels and section titles are hidden.
+    /// </summary>
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
     {
         _sidebarCollapsed = !_sidebarCollapsed;
-        SidebarColumn.Width = new GridLength(_sidebarCollapsed ? 88 : 225);
-        NavHost.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        DashboardNavText.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        CreateNavText.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        ConsoleNavText.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        DashboardNavIcon.Margin = _sidebarCollapsed ? new Thickness(8, 0, 0, 0) : new Thickness(0, 0, 8, 0);
-        CreateNavIcon.Margin = _sidebarCollapsed ? new Thickness(8, 0, 0, 0) : new Thickness(0, 0, 8, 0);
-        ConsoleNavIcon.Margin = _sidebarCollapsed ? new Thickness(8, 0, 0, 0) : new Thickness(0, 0, 8, 0);
-        SidebarToggleArrow.Data = Geometry.Parse(_sidebarCollapsed ? "M0,0 L10,9 L0,18 Z" : "M10,0 L0,9 L10,18 Z");
-        SidebarToggleButton.ToolTip = _sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar";
+        var collapsed = _sidebarCollapsed;
+        var labelVisibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        var alignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+
+        // 36px icon + button padding/margins + 24px toggle strip.
+        SidebarColumn.Width = new GridLength(collapsed ? 96 : 225);
+
+        foreach (var (text, icon) in new[] { (DashboardNavText, DashboardNavIcon), (CreateNavText, CreateNavIcon), (ConsoleNavText, ConsoleNavIcon) })
+        {
+            text.Visibility = labelVisibility;
+            icon.Margin = collapsed ? new Thickness(0) : new Thickness(0, 0, 8, 0);
+            if (icon.Parent is FrameworkElement row && row.Parent is Button button)
+            {
+                button.HorizontalContentAlignment = alignment;
+                button.ToolTip = text.Text;
+            }
+        }
+
+        foreach (var (button, icon, label) in _navItems)
+        {
+            label.Visibility = labelVisibility;
+            icon.Margin = collapsed ? new Thickness(0) : new Thickness(0, 0, 10, 0);
+            button.HorizontalContentAlignment = alignment;
+        }
+
+        // Section titles don't fit in the rail; keep the sections open so every icon stays reachable.
+        foreach (var (section, title) in _navSections)
+        {
+            section.Header = collapsed ? null : title;
+            if (collapsed) section.IsExpanded = true;
+        }
+
+        SidebarToggleArrow.Data = Geometry.Parse(collapsed ? "M0,0 L10,9 L0,18 Z" : "M10,0 L0,9 L10,18 Z");
+        SidebarToggleButton.ToolTip = collapsed ? "Expand sidebar" : "Collapse sidebar";
     }
 
     private void ThemePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)

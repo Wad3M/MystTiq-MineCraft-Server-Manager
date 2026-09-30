@@ -4,7 +4,7 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.4.1, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.4.2, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
@@ -101,4 +101,4 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 ## Release notes
 
-The latest is [v0.4.1](docs/releases/RELEASE_NOTES_v0.4.1.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.4.2](docs/releases/RELEASE_NOTES_v0.4.2.md). See [`docs/releases/`](docs/releases/) for all versions.

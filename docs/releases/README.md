@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.4.1** (current) | [MystTiq banner; MystMC name removed from the app](RELEASE_NOTES_v0.4.1.md) |
+| **0.4.2** (current) | [Sidebar collapses to an icon rail](RELEASE_NOTES_v0.4.2.md) |
+| 0.4.1 | [MystTiq banner; MystMC name removed from the app](RELEASE_NOTES_v0.4.1.md) |
 | 0.4.0 | [Simpler sidebar: 10 pages instead of 22](RELEASE_NOTES_v0.4.0.md) |
 | 0.3.0 | [Add-ons page: plugins and Fabric mods from Modrinth](RELEASE_NOTES_v0.3.0.md) |
 | 0.2.1 | [Port field, EULA consent, verified downloads, Java check](RELEASE_NOTES_v0.2.1.md) |
