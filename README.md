@@ -103,6 +103,10 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 Windows releases are being set up for free code signing through [SignPath Foundation](https://signpath.org/). Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). See the [code signing policy](docs/CODE_SIGNING.md) for who signs what, and for the privacy policy. In short, the app has no telemetry and only goes online when you ask it to.
 
+## License
+
+[MIT](LICENSE). Minecraft is a trademark of Mojang AB. This project is not affiliated with or endorsed by Mojang or Microsoft.
+
 ## Release notes
 
 The latest is [v0.4.2](docs/releases/RELEASE_NOTES_v0.4.2.md). See [`docs/releases/`](docs/releases/) for all versions.

@@ -9,6 +9,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>ASimpleMinecraftServer</AssemblyName>
     <RootNamespace>ASimpleMinecraftServer</RootNamespace>
+    <Copyright>Copyright (c) 2026 Wad3M. MIT License.</Copyright>
     <Version>0.4.2</Version>
     <FileVersion>0.4.2.0</FileVersion>
     <AssemblyVersion>0.4.2.0</AssemblyVersion>
