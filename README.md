@@ -4,13 +4,14 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.4.2, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.5.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
 - **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, or Fabric (checked against the provider's published checksum), or uses your own JAR. It picks a free port and writes a starting `server.properties` for you.
 - **Run several servers at once.** Each server has its own folder, version, memory limit, Java path, console, and player list. The dashboard shows them all with Start/Stop buttons.
 - **Port conflict check.** A server won't start if its port is already taken.
+- **How to connect.** The dashboard shows the address to join from this PC, your home network, and the internet, with Copy buttons.
 - **Start, stop, restart, and a live console.** Graceful stop, with a warning before any force kill.
 - **Backups.** Manual or scheduled, with a retention limit and automatic safety backups before updates.
 - **Add-ons: plugins and mods.** Paper, Purpur, and Folia servers get plugins; Fabric servers get mods. Search Modrinth in the app (only compatible, server-side results), install with one click (SHA-512 verified), or add a JAR from a file.
@@ -109,4 +110,4 @@ Windows releases are being set up for free code signing through [SignPath Founda
 
 ## Release notes
 
-The latest is [v0.4.2](docs/releases/RELEASE_NOTES_v0.4.2.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.5.0](docs/releases/RELEASE_NOTES_v0.5.0.md). See [`docs/releases/`](docs/releases/) for all versions.

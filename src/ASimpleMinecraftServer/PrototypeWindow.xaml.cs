@@ -1,5 +1,6 @@
 using ASimpleMinecraftServer.Core;
 using ASimpleMinecraftServer.Models;
+using ASimpleMinecraftServer.Services;
 using ASimpleMinecraftServer.UI.Pages;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
@@ -49,7 +50,7 @@ public partial class PrototypeWindow : Window
         ["settings_top"]="settings", ["help"]="help", ["about"]="about", ["start"]="start", ["stop"]="stop", ["restart"]="restart",
         ["kill"]="force_stop", ["backup"]="backup", ["createbackup"]="backup", ["filemanager"]="files", ["server"]="server", ["serverinfo"]="info",
         ["page_server"]="server", ["openconsole"]="terminal", ["createworld"]="new_world", ["tps"]="tps", ["cpu"]="cpu", ["memory"]="ram",
-        ["disk"]="disk", ["mspt"]="mspt", ["clock"]="time", ["signal"]="network", ["log"]="logs", ["edit"]="edit", ["viewall"]="search", ["search"]="search"
+        ["disk"]="disk", ["mspt"]="mspt", ["clock"]="time", ["signal"]="network", ["network"]="network", ["log"]="logs", ["edit"]="edit", ["viewall"]="search", ["search"]="search"
     };
     private static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -57,6 +58,11 @@ public partial class PrototypeWindow : Window
     private readonly Dictionary<string, Button> _toolbarButtons = new(StringComparer.OrdinalIgnoreCase);
     private DispatcherTimer? _statusTimer;
     private bool _sidebarCollapsed;
+    // The dashboard rebuilds every second, so connection details live here between rebuilds.
+    private IReadOnlyList<string> _lanAddresses = [];
+    private DateTimeOffset _lanAddressesAt = DateTimeOffset.MinValue;
+    private string? _publicAddress;
+    private bool _publicAddressLoading;
     // Sidebar pieces the collapse toggle switches between "icon + label" and "icon only".
     private readonly List<(Button Button, FrameworkElement Icon, TextBlock Label)> _navItems = new();
     private readonly List<(Expander Section, string Title)> _navSections = new();
@@ -385,8 +391,84 @@ public partial class PrototypeWindow : Window
         else protection.Children.Add(Muted("No server selected."));
         protectionCard.Child = protection; Grid.SetColumn(protectionCard, 2); grid.Children.Add(protectionCard);
         root.Children.Add(grid);
+        if (_backend.SelectedServer is { } connectTo) root.Children.Add(BuildConnectCard(connectTo));
         root.Children.Add(BuildAllServersCard());
         return root;
+    }
+
+    /// <summary>
+    /// The addresses players type into Minecraft to join the selected server: this PC,
+    /// the home network, and the internet (public IP looked up only when asked).
+    /// </summary>
+    private UIElement BuildConnectCard(ServerProfile profile)
+    {
+        if (DateTimeOffset.Now - _lanAddressesAt > TimeSpan.FromSeconds(30))
+        {
+            _lanAddresses = NetworkAddressService.GetLanAddresses();
+            _lanAddressesAt = DateTimeOffset.Now;
+        }
+        var port = profile.Port;
+        var lan = _lanAddresses.FirstOrDefault();
+
+        var card = Card(); card.Padding = new Thickness(12); card.Margin = new Thickness(0, 8, 0, 0);
+        var stack = new StackPanel(); card.Child = stack;
+        stack.Children.Add(TitleRow("network", $"How to Connect to {profile.Name}"));
+
+        var rows = new Grid();
+        rows.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+        rows.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        rows.ColumnDefinitions.Add(new ColumnDefinition());
+        void AddRow(string label, string? address, UIElement? action, string note)
+        {
+            var row = rows.RowDefinitions.Count;
+            rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var name = new TextBlock { Text = label, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
+            Grid.SetRow(name, row); rows.Children.Add(name);
+            var value = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (address is not null)
+            {
+                value.Children.Add(new TextBox { Text = address, IsReadOnly = true, FontFamily = new FontFamily("Consolas"), MinWidth = 190, Margin = new Thickness(0, 2, 6, 2), VerticalContentAlignment = VerticalAlignment.Center });
+                value.Children.Add(ActionButton("Copy", (_, _) => { try { Clipboard.SetText(address); PrototypeStatus.Text = $"Copied {address}"; } catch { } }));
+            }
+            if (action is not null) value.Children.Add(action);
+            Grid.SetRow(value, row); Grid.SetColumn(value, 1); rows.Children.Add(value);
+            var hint = Muted(note); hint.VerticalAlignment = VerticalAlignment.Center; hint.Margin = new Thickness(10, 0, 0, 0);
+            Grid.SetRow(hint, row); Grid.SetColumn(hint, 2); rows.Children.Add(hint);
+        }
+
+        AddRow("This PC", $"localhost:{port}", null, "Play on the same computer that runs the server.");
+        AddRow("Same network (LAN)", lan is null ? null : $"{lan}:{port}", null,
+            lan is null ? "No local network connection found." : "Friends on your Wi-Fi or home network.");
+
+        UIElement publicAction;
+        if (_publicAddress is not null) publicAction = new TextBlock();
+        else
+        {
+            var show = ActionButton(_publicAddressLoading ? "Looking up…" : "Show public address", async (_, _) =>
+            {
+                if (_backend is null || _publicAddressLoading) return;
+                _publicAddressLoading = true; RefreshDashboard();
+                try { _publicAddress = await _backend.Network.GetPublicAddressAsync(); }
+                catch (Exception ex) { PrototypeStatus.Text = $"Couldn't look up the public address: {ex.Message}"; }
+                finally { _publicAddressLoading = false; RefreshDashboard(); }
+            });
+            show.IsEnabled = !_publicAddressLoading;
+            show.ToolTip = "Asks api.ipify.org for this network's public IP. Only happens when you click.";
+            publicAction = show;
+        }
+        AddRow("Internet", _publicAddress is null ? null : $"{_publicAddress}:{port}", publicAction,
+            lan is null ? $"Forward TCP port {port} on your router to this PC." : $"Needs TCP port {port} forwarded on your router to {lan}.");
+        stack.Children.Add(rows);
+
+        var tip = Muted($"In Minecraft: Multiplayer → Add Server, then paste the address. Port {port} must be different for every server you run at the same time. Windows Firewall may ask to allow Java the first time a server starts; allow it on private networks.");
+        tip.Margin = new Thickness(0, 8, 0, 0);
+        stack.Children.Add(tip);
+        return card;
+    }
+
+    private void RefreshDashboard()
+    {
+        if (_currentPage == "Dashboard") PageContent.Content = BuildDashboard();
     }
 
     /// <summary>Every server profile with its port and state, and a Start/Stop button for each.</summary>
@@ -1058,8 +1140,11 @@ public partial class PrototypeWindow : Window
     {
         UpdateCpuSample();
         RefreshShellStatus();
-        if (_currentPage == "Dashboard") PageContent.Content = BuildDashboard();
-        else if (_activeTab == "Performance" && _activeTabItem is not null) _activeTabItem.Content = BuildPerformancePage();
+        // Rebuilding the page replaces its buttons; skip a tick while a click is in progress
+        // so the press and release land on the same button.
+        var clicking = System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed;
+        if (!clicking && _currentPage == "Dashboard") PageContent.Content = BuildDashboard();
+        else if (!clicking && _activeTab == "Performance" && _activeTabItem is not null) _activeTabItem.Content = BuildPerformancePage();
 
         if (!_maintenanceBusy && _backend is not null && DateTimeOffset.Now - _lastMaintenanceCheck >= TimeSpan.FromMinutes(1))
         {

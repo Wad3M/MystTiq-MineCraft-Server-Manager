@@ -30,5 +30,6 @@ It only connects to the internet when you use a feature that needs it:
 | Open Create Server or install a server | Mojang (`piston-meta.mojang.com`), PaperMC (`fill.papermc.io`), PurpurMC (`api.purpurmc.org`), FabricMC (`meta.fabricmc.net`) | List Minecraft versions and download the server JAR you picked |
 | Search or install add-ons, or install a plugin pack | Modrinth (`api.modrinth.com`, `cdn.modrinth.com`) | Search for and download plugins or mods |
 | Open the EULA link | `aka.ms` in your browser | Show the Minecraft EULA |
+| Click **Show public address** on the Dashboard | ipify (`api.ipify.org`) | Find your network's public IP so you can share it with friends |
 
 These requests carry the app name and version in the User-Agent header and nothing else about you. The app has no telemetry, analytics or crash reporting. The Minecraft servers you run are separate programs, and their own network use is up to them.

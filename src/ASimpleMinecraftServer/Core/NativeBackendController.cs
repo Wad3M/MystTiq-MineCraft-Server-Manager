@@ -29,6 +29,7 @@ public sealed class NativeBackendController : IDisposable
     public ServerTemplateService Templates { get; } = new();
     public PluginPackService PluginPacks { get; } = new();
     public ScheduledTaskStore ScheduledTasks { get; } = new();
+    public NetworkAddressService Network { get; }
 
     public ServerProfile? SelectedServer => _selectedServer;
 
@@ -60,6 +61,7 @@ public sealed class NativeBackendController : IDisposable
     {
         _versions = new VersionManager(_downloads);
         _serverInstaller = new ServerInstaller(_downloads, _versions);
+        Network = new NetworkAddressService(_downloads);
 
         DataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ASimpleMinecraftServer");
         Directory.CreateDirectory(DataDirectory);
