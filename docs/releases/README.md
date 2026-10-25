@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.5.0** (current) | [How to Connect card with LAN and public addresses](RELEASE_NOTES_v0.5.0.md) |
+| **0.5.1** (current) | [Code-review fixes: no lost servers, safe backups and restores, tests](RELEASE_NOTES_v0.5.1.md) |
+| 0.5.0 | [How to Connect card with LAN and public addresses](RELEASE_NOTES_v0.5.0.md) |
 | 0.4.2 | [Sidebar collapses to an icon rail](RELEASE_NOTES_v0.4.2.md) |
 | 0.4.1 | [MystTiq banner; MystMC name removed from the app](RELEASE_NOTES_v0.4.1.md) |
 | 0.4.0 | [Simpler sidebar: 10 pages instead of 22](RELEASE_NOTES_v0.4.0.md) |

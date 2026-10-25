@@ -32,6 +32,8 @@ public sealed class NativeBackendController : IDisposable
     public NetworkAddressService Network { get; }
 
     public ServerProfile? SelectedServer => _selectedServer;
+    /// <summary>Set when the server list had to be recovered at startup.</summary>
+    public string? StartupWarning => _profileStore.LoadWarning;
 
     // The members below describe the *selected* server. Every server has its own
     // ServerInstance, so selecting a different server switches what these report.
@@ -190,15 +192,14 @@ public sealed class NativeBackendController : IDisposable
         var existing = Servers.FirstOrDefault(s => PathsEqual(s.Folder, folder));
         if (existing is not null) { SelectServer(existing); return existing; }
 
-        var jar = Directory.EnumerateFiles(folder, "*.jar", SearchOption.TopDirectoryOnly)
-            .Select(Path.GetFileName).FirstOrDefault() ?? "server.jar";
+        var jar = ServerFolderInspector.FindServerJar(folder);
         var profile = new ServerProfile
         {
             Name = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
             Folder = Path.GetFullPath(folder),
-            Jar = jar ?? "server.jar",
-            Version = DetectVersion(folder),
-            Type = DetectServerType(folder, jar ?? string.Empty),
+            Jar = jar,
+            Version = ServerFolderInspector.DetectVersion(folder, jar),
+            Type = ServerFolderInspector.DetectServerType(folder, jar),
             MemoryGb = 4,
             JavaPath = "java"
         };
@@ -228,7 +229,15 @@ public sealed class NativeBackendController : IDisposable
     public void UpdateSelectedProfile(string name, int memoryGb, string javaPath, string jar, string type, string version)
     {
         var profile = RequireSelected();
-        profile.Name = string.IsNullOrWhiteSpace(name) ? profile.Name : name.Trim();
+        var newName = string.IsNullOrWhiteSpace(name) ? profile.Name : name.Trim();
+        if (!string.Equals(newName, profile.Name, StringComparison.Ordinal))
+        {
+            if (Servers.Any(s => !ReferenceEquals(s, profile) && string.Equals(s.Name, newName, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Another server is already called '{newName}'.");
+            // Backups are kept in a folder named after the server, so move them with the rename.
+            Backups.MoveBackupsForRename(profile.Name, newName);
+            profile.Name = newName;
+        }
         profile.Type = string.IsNullOrWhiteSpace(type) ? profile.Type : type.Trim();
         profile.Version = version?.Trim() ?? string.Empty;
         profile.MemoryGb = Math.Max(1, memoryGb);
@@ -237,6 +246,28 @@ public sealed class NativeBackendController : IDisposable
         profile.RefreshDerivedProperties();
         SaveProfiles();
         StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Removes a server from the list. Its folder, worlds and backups stay on disk; it can be
+    /// added again with Add Existing Server.
+    /// </summary>
+    public void RemoveServer(ServerProfile profile)
+    {
+        if (GetInstance(profile).IsRunning) throw new InvalidOperationException($"Stop {profile.Name} before removing it from the list.");
+        lock (_instances)
+        {
+            if (_instances.Remove(profile, out var instance))
+            {
+                instance.ConsoleLineReceived -= Instance_ConsoleLineReceived;
+                instance.PlayersChanged -= Instance_PlayersChanged;
+                instance.Exited -= Instance_Exited;
+                instance.Dispose();
+            }
+        }
+        Servers.Remove(profile);
+        SaveProfiles();
+        SelectServer(Servers.FirstOrDefault());
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default) => StartAsync(RequireSelected(), cancellationToken);
@@ -321,23 +352,52 @@ public sealed class NativeBackendController : IDisposable
     public async Task<BackupRecord> CreateBackupAsync(CancellationToken cancellationToken = default)
     {
         var profile = RequireSelected();
-        await FlushBeforeBackupAsync(profile, 1200, cancellationToken);
-        var backup = await Backups.CreateAsync(profile, "Manual", cancellationToken: cancellationToken);
+        var backup = await CreateConsistentBackupAsync(profile, "Manual", cancellationToken);
         GetInstance(profile).AddConsole($"[Manager] Backup created: {backup.Name}");
         StateChanged?.Invoke(this, EventArgs.Empty);
         return backup;
     }
 
-    private async Task FlushBeforeBackupAsync(ServerProfile profile, int delayMs, CancellationToken cancellationToken)
+    /// <summary>
+    /// Backs up a server safely while it runs: pauses world saving, forces a full save and waits
+    /// for the server to confirm it, zips the folder, then always turns saving back on.
+    /// </summary>
+    private async Task<BackupRecord> CreateConsistentBackupAsync(ServerProfile profile, string type, CancellationToken cancellationToken)
     {
         var instance = GetInstance(profile);
         if (instance.IsRunning && !instance.CanSendCommands)
             throw new InvalidOperationException("A safe live backup is unavailable for a recovered server process. Stop it first.");
-        if (instance.CanSendCommands)
+        var savingPaused = false;
+        try
         {
-            instance.Launcher.SendCommand("save-all flush");
-            await Task.Delay(delayMs, cancellationToken);
+            if (instance.CanSendCommands)
+            {
+                instance.Launcher.SendCommand("save-off");
+                savingPaused = true;
+                var saved = await instance.SendAndWaitForLineAsync("save-all flush",
+                    line => line.Contains("Saved the game", StringComparison.OrdinalIgnoreCase), TimeSpan.FromSeconds(60), cancellationToken);
+                if (!saved) instance.AddConsole("[Manager] The server didn't confirm the save within 60 seconds; backing up anyway.");
+            }
+            return await Backups.CreateAsync(profile, type, cancellationToken: cancellationToken);
         }
+        finally
+        {
+            if (savingPaused && instance.CanSendCommands) instance.Launcher.SendCommand("save-on");
+        }
+    }
+
+    /// <summary>
+    /// Restores a backup over the server folder, after first taking a safety backup of the
+    /// current files so a bad restore can be undone.
+    /// </summary>
+    public async Task<BackupRecord> RestoreBackupAsync(ServerProfile profile, BackupRecord backup, CancellationToken cancellationToken = default)
+    {
+        if (GetInstance(profile).IsRunning) throw new InvalidOperationException($"Stop {profile.Name} before restoring a backup.");
+        var safety = await Backups.CreateAsync(profile, "Safety-BeforeRestore", cancellationToken: cancellationToken);
+        await Backups.RestoreAsync(profile, backup, cancellationToken: cancellationToken);
+        GetInstance(profile).AddConsole($"[Manager] Restored {backup.Name}. The previous files were saved first as {safety.Name}.");
+        StateChanged?.Invoke(this, EventArgs.Empty);
+        return safety;
     }
 
     public IReadOnlyList<string> ConsoleSnapshot() => Selected?.ConsoleSnapshot() ?? [];
@@ -439,8 +499,7 @@ public sealed class NativeBackendController : IDisposable
             if (instance.IsRunning && !instance.CanSendCommands) continue;
             try
             {
-                await FlushBeforeBackupAsync(profile, 1000, cancellationToken);
-                await Backups.CreateAsync(profile, "Automatic", cancellationToken: cancellationToken);
+                await CreateConsistentBackupAsync(profile, "Automatic", cancellationToken);
                 profile.LastAutomaticBackupAt = now;
                 Backups.ApplyAutomaticRetention(profile, Math.Max(1, profile.BackupRetentionCount));
                 SaveProfiles();
@@ -471,8 +530,7 @@ public sealed class NativeBackendController : IDisposable
                         SendCommand(target, task.Payload);
                         break;
                     case "backup":
-                        await FlushBeforeBackupAsync(target, 1000, cancellationToken);
-                        await Backups.CreateAsync(target, "Automatic", cancellationToken: cancellationToken);
+                        await CreateConsistentBackupAsync(target, "Automatic", cancellationToken);
                         break;
                     case "start":
                         if (targetInstance.IsRunning) throw new InvalidOperationException($"{target.Name} is already running.");
@@ -559,23 +617,6 @@ public sealed class NativeBackendController : IDisposable
     {
         try { return string.Equals(Path.GetFullPath(a).TrimEnd('\\','/'), Path.GetFullPath(b).TrimEnd('\\','/'), StringComparison.OrdinalIgnoreCase); }
         catch { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
-    }
-
-    private static string DetectVersion(string folder)
-    {
-        var props = Path.Combine(folder, "version_history.json");
-        return File.Exists(props) ? "Detected" : string.Empty;
-    }
-
-    private static string DetectServerType(string folder, string jar)
-    {
-        var name = jar.ToLowerInvariant();
-        if (name.Contains("folia")) return "Folia";
-        if (name.Contains("paper")) return "Paper";
-        if (name.Contains("purpur")) return "Purpur";
-        if (name.Contains("fabric")) return "Fabric";
-        if (Directory.Exists(Path.Combine(folder, "plugins"))) return "Paper/Spigot";
-        return "Vanilla";
     }
 
     public void Dispose()

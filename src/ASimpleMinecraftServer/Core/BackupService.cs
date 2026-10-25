@@ -16,11 +16,33 @@ public sealed class BackupService
 
     public string GetServerBackupFolder(ServerProfile profile)
     {
-        var safe = string.Concat(profile.Name.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch)).Trim();
-        if (string.IsNullOrWhiteSpace(safe)) safe = "Minecraft Server";
-        var folder = Path.Combine(BackupRoot, safe);
+        var folder = Path.Combine(BackupRoot, SafeFolderName(profile.Name));
         Directory.CreateDirectory(folder);
         return folder;
+    }
+
+    private static string SafeFolderName(string serverName)
+    {
+        var safe = string.Concat(serverName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch)).Trim();
+        return string.IsNullOrWhiteSpace(safe) ? "Minecraft Server" : safe;
+    }
+
+    /// <summary>
+    /// Moves a server's backups when it is renamed, so they stay listed and covered by retention.
+    /// If backups already exist under the new name, the old ones are moved in beside them.
+    /// </summary>
+    public void MoveBackupsForRename(string oldName, string newName)
+    {
+        var from = Path.Combine(BackupRoot, SafeFolderName(oldName));
+        var to = Path.Combine(BackupRoot, SafeFolderName(newName));
+        if (!Directory.Exists(from) || string.Equals(Path.GetFullPath(from), Path.GetFullPath(to), StringComparison.OrdinalIgnoreCase)) return;
+        if (!Directory.Exists(to)) { Directory.Move(from, to); return; }
+        foreach (var file in Directory.EnumerateFiles(from, "*.zip"))
+        {
+            var destination = Path.Combine(to, Path.GetFileName(file));
+            if (!File.Exists(destination)) File.Move(file, destination);
+        }
+        if (!Directory.EnumerateFileSystemEntries(from).Any()) Directory.Delete(from);
     }
 
     public IReadOnlyList<BackupRecord> List(ServerProfile profile)

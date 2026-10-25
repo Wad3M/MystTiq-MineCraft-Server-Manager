@@ -20,3 +20,6 @@ jobs:
 
       - name: Build
         run: dotnet build src/ASimpleMinecraftServer/ASimpleMinecraftServer.csproj -c Release -warnaserror
+
+      - name: Unit tests
+        run: dotnet test tests/ASimpleMinecraftServer.Tests/ASimpleMinecraftServer.Tests.csproj -c Release --logger "console;verbosity=normal"

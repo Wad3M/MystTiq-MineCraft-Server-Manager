@@ -205,8 +205,21 @@ public sealed class ServerLauncher : IDisposable
 
     private void OnProcessExited(object? sender, EventArgs e)
     {
+        // Only react to the process this launcher is tracking. A late Exited event from a
+        // previous process (e.g. after a quick restart) must not report on or dispose the new one.
+        if (sender is not Process exited || !ReferenceEquals(exited, _process))
+        {
+            if (sender is Process stale)
+            {
+                stale.OutputDataReceived -= OnOutputDataReceived;
+                stale.ErrorDataReceived -= OnErrorDataReceived;
+                stale.Exited -= OnProcessExited;
+                stale.Dispose();
+            }
+            return;
+        }
         int? exitCode = null;
-        try { exitCode = _process?.ExitCode; } catch { }
+        try { exitCode = exited.ExitCode; } catch { }
         var args = new ServerProcessExitedEventArgs
         {
             ExitCode = exitCode,

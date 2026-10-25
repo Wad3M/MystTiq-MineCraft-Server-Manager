@@ -52,6 +52,26 @@ public sealed class ServerInstance : IDisposable
         ConsoleLineReceived?.Invoke(this, line);
     }
 
+    /// <summary>
+    /// Sends a command and waits until the server prints a line matching <paramref name="match"/>.
+    /// Returns false if no such line arrives within the timeout.
+    /// </summary>
+    public async Task<bool> SendAndWaitForLineAsync(string command, Func<string, bool> match, TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var seen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Handler(object? sender, string line) { if (match(line)) seen.TrySetResult(); }
+        Launcher.OutputReceived += Handler;
+        try
+        {
+            Launcher.SendCommand(command);
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutSource.CancelAfter(timeout);
+            try { await seen.Task.WaitAsync(timeoutSource.Token); return true; }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return false; }
+        }
+        finally { Launcher.OutputReceived -= Handler; }
+    }
+
     private void Launcher_OutputReceived(object? sender, string line)
     {
         AddConsole(line);

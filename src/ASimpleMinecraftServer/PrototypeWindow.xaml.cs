@@ -114,6 +114,11 @@ public partial class PrototypeWindow : Window
             Navigate("Dashboard");
             RefreshShellStatus();
             App.WriteStartupLog($"Native backend initialized. Profiles: {_backend.Servers.Count}.");
+            if (_backend.StartupWarning is { } warning)
+            {
+                App.WriteStartupLog(warning);
+                MessageBox.Show(this, warning, "Server list recovered", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         catch (Exception ex)
         {
@@ -492,7 +497,7 @@ public partial class PrototypeWindow : Window
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var name = new TextBlock { Text = (ReferenceEquals(profile, _backend.SelectedServer) ? "▶ " : string.Empty) + profile.Name, FontWeight = FontWeights.SemiBold };
             text.Children.Add(name);
-            text.Children.Add(Muted($"{profile.Type} {profile.Version}   •   Port {profile.Port}   •   {profile.MemoryGb} GB   •   {(running ? profile.RuntimeState : "Stopped")}"));
+            text.Children.Add(Muted($"{profile.Type} {profile.Version}   •   Port {profile.Port}   •   {profile.MemoryGb} GB   •   {(running ? profile.RuntimeState : Directory.Exists(profile.Folder) ? "Stopped" : "Folder missing (drive disconnected?)")}"));
             row.Children.Add(text);
 
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -1041,7 +1046,7 @@ public partial class PrototypeWindow : Window
         var settingsRow = new WrapPanel(); var auto = new CheckBox { Content = "Automatic backups", IsChecked = profile.AutomaticBackupsEnabled, Margin = new Thickness(0, 6, 15, 0) }; var interval = new TextBox { Text = profile.BackupIntervalMinutes.ToString(), Width = 70, Margin = new Thickness(0, 0, 8, 0) }; var retention = new TextBox { Text = profile.BackupRetentionCount.ToString(), Width = 70, Margin = new Thickness(0, 0, 8, 0) }; settingsRow.Children.Add(auto); settingsRow.Children.Add(new TextBlock { Text = "Interval (min)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) }); settingsRow.Children.Add(interval); settingsRow.Children.Add(new TextBlock { Text = "Keep", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) }); settingsRow.Children.Add(retention); settingsRow.Children.Add(ActionButton("Save", (_, _) => { profile.AutomaticBackupsEnabled = auto.IsChecked == true; if (int.TryParse(interval.Text, out var i)) profile.BackupIntervalMinutes = Math.Max(5, i); if (int.TryParse(retention.Text, out var r)) profile.BackupRetentionCount = Math.Max(1, r); _backend.SaveProfiles(); })); settings.Child = settingsRow; root.Children.Add(settings);
         var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         buttons.Children.Add(ActionButton("Backup Now", async (_, _) => { try { await _backend.CreateBackupAsync(); Navigate("Auto Backups"); } catch (Exception ex) { ShowError("Backup failed", ex); } }, "GreenActionButton"));
-        buttons.Children.Add(ActionButton("Restore", async (_, _) => { if (grid.SelectedItem is not BackupRecord b) return; if (_backend.IsServerRunning(profile)) { MessageBox.Show("Stop the selected server before restoring a backup."); return; } if (!Confirm($"Restore '{b.Name}'? Existing server files will be replaced.")) return; await _backend.Backups.RestoreAsync(profile, b); MessageBox.Show("Backup restored."); }));
+        buttons.Children.Add(ActionButton("Restore", async (_, _) => { if (grid.SelectedItem is not BackupRecord b) return; if (_backend.IsServerRunning(profile)) { MessageBox.Show("Stop the selected server before restoring a backup."); return; } if (!Confirm($"Restore '{b.Name}'? The server's current files will be replaced. A safety backup of them is taken first.")) return; try { var safety = await _backend.RestoreBackupAsync(profile, b); MessageBox.Show($"Backup restored.\n\nThe files it replaced were saved as {safety.Name}, in case you need them back."); } catch (Exception ex) { ShowError("Restore failed", ex); } Navigate("Backups"); }));
         buttons.Children.Add(ActionButton("Delete", (_, _) => { if (grid.SelectedItem is BackupRecord b && Confirm($"Delete backup '{b.Name}'?")) { _backend.Backups.Delete(b); backups.Remove(b); } }, "DangerButton"));
         buttons.Children.Add(ActionButton("Open Backup Folder", (_, _) => OpenFolder(_backend.Backups.GetServerBackupFolder(profile))));
         root.Children.Add(buttons); return root;
@@ -1059,7 +1064,13 @@ public partial class PrototypeWindow : Window
         stack.Children.Add(new TextBlock { Text = "Name" }); stack.Children.Add(name);
         stack.Children.Add(new TextBlock { Text = "Server type" }); stack.Children.Add(serverType);
         stack.Children.Add(new TextBlock { Text = "Minecraft version" }); stack.Children.Add(mcVersion); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
-        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text, serverType.Text, mcVersion.Text); Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder))); stack.Children.Add(buttons); card.Child = stack; root.Children.Add(card);
+        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; try { _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text, serverType.Text, mcVersion.Text); } catch (Exception ex) { ShowError("Could not save the profile", ex); } Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder)));
+        buttons.Children.Add(ActionButton("Remove from List…", (_, _) =>
+        {
+            if (!Confirm($"Remove '{profile.Name}' from MystTiq?\n\nOnly the list entry is removed. The server folder, worlds and backups stay on disk, and you can add it back with Create Server → Add Existing Server.")) return;
+            try { _backend!.RemoveServer(profile); Navigate("Dashboard"); }
+            catch (Exception ex) { ShowError("Could not remove the server", ex); }
+        }, "DangerButton")); stack.Children.Add(buttons); card.Child = stack; root.Children.Add(card);
         var config = new ConfigurationView(); config.ResetForSelection(profile); config.ConfigurationSaved += (_, _) => _backend!.SaveProfiles(); root.Children.Add(config);
         return root;
     }
