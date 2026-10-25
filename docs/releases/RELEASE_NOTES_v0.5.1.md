@@ -15,4 +15,4 @@ Fixes from a code review, plus the project's first automated tests.
 - **Remove from List** (Settings → Server). It removes a server from MystTiq without touching its folder, worlds or backups.
 
 ## Tests
-- Automated tests cover version and Java rules, add-on type checks, server-folder detection, the server list and session files, backups (create, restore, rename, retention) and install validation. They run on Windows for every push.
+- 57 automated tests (all passing) cover version and Java rules, add-on type checks, server-folder detection, the server list and session files, backups (create, restore, rename, retention) and install validation. They run on Windows for every push.
