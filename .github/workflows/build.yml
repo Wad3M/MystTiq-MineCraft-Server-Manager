@@ -14,9 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Get the newest .NET 10 SDK, but don't fail the run if Microsoft's download is briefly
+      # unavailable: windows-latest already ships a .NET 10 SDK, checked in the next step.
       - uses: actions/setup-dotnet@v6
+        continue-on-error: true
         with:
           dotnet-version: 10.0.x
+
+      - name: Check .NET 10 SDK
+        shell: pwsh
+        run: |
+          $sdks = dotnet --list-sdks
+          $sdks
+          if (-not ($sdks -match '^10\.')) { throw "No .NET 10 SDK is available on this runner." }
 
       - name: Build
         run: dotnet build src/ASimpleMinecraftServer/ASimpleMinecraftServer.csproj -c Release -warnaserror
