@@ -29,10 +29,10 @@ public class JavaRuntimeTests
     [Fact]
     public void Parses_the_windows_zip_from_adoptium()
     {
-        var json = $$"""
+        var json = $$$$"""
         [{"binary":{"os":"windows","architecture":"x64","image_type":"jre",
-          "installer":{"link":"https://github.com/adoptium/x/OpenJDK21U-jre_x64_windows.msi","checksum":"{{Sha}}"},
-          "package":{"link":"https://github.com/adoptium/x/OpenJDK21U-jre_x64_windows.zip","checksum":"{{Sha}}","size":47185920}},
+          "installer":{"link":"https://github.com/adoptium/x/OpenJDK21U-jre_x64_windows.msi","checksum":"{{{{Sha}}}}"},
+          "package":{"link":"https://github.com/adoptium/x/OpenJDK21U-jre_x64_windows.zip","checksum":"{{{{Sha}}}}","size":47185920}},
           "release_name":"jdk-21.0.5+11"}]
         """;
         using var doc = JsonDocument.Parse(json);
@@ -53,7 +53,7 @@ public class JavaRuntimeTests
     [Fact]
     public void Refuses_a_plain_http_link()
     {
-        using var doc = JsonDocument.Parse($$"""[{"binary":{"package":{"link":"http://example.com/b.zip","checksum":"{{Sha}}"}}}]""");
+        using var doc = JsonDocument.Parse($$$$"""[{"binary":{"package":{"link":"http://example.com/b.zip","checksum":"{{{{Sha}}}}"}}}]""");
         Assert.Throws<InvalidDataException>(() => JavaRuntimeService.ParseLatestAsset(doc.RootElement));
     }
 
