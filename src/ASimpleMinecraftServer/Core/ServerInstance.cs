@@ -36,6 +36,9 @@ public sealed class ServerInstance : IDisposable
         PendingRestart = null;
     }
 
+    /// <summary>Latest Chunky pre-generation progress seen in the console, if any.</summary>
+    public PregenStatus? Pregen { get; set; }
+
     public bool IsRunning => Launcher.IsRunning;
     public bool IsRecoveredProcess => Launcher.IsAttachedProcess;
     public bool CanSendCommands => Launcher.CanSendCommands;
@@ -86,6 +89,7 @@ public sealed class ServerInstance : IDisposable
     {
         AddConsole(line);
         ParsePlayerLine(line);
+        if (line.Contains("[Chunky]", StringComparison.Ordinal) && ChunkyProgress.Parse(line, DateTimeOffset.Now) is { } pregen) Pregen = pregen;
     }
 
     private void Launcher_Exited(object? sender, ServerProcessExitedEventArgs e)

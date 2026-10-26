@@ -664,6 +664,47 @@ public sealed class NativeBackendController : IDisposable
         PlayerListFiles.SetWhitelistEnforced(profile.Folder, enabled);
     }
 
+    // ---- World pre-generation (Chunky) ----
+
+    public bool IsChunkyInstalled(ServerProfile profile) =>
+        Directory.Exists(profile.Folder) && Plugins.List(profile).Any(p => p.Name.Equals("Chunky", StringComparison.OrdinalIgnoreCase) || p.FileName.StartsWith("Chunky", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Installs Chunky from Modrinth (exact project, hash checked) on the selected server.</summary>
+    public async Task<string> InstallChunkyAsync(CancellationToken cancellationToken = default) =>
+        (await InstallAddonByIdAsync("chunky", cancellationToken)).Name;
+
+    public PregenStatus? GetPregenStatus(ServerProfile profile) => GetInstance(profile).Pregen;
+
+    /// <summary>Starts pre-generating a square of <paramref name="radius"/> blocks around 0,0 on the running server.</summary>
+    public void StartPregeneration(ServerProfile profile, int radius, bool setWorldBorder)
+    {
+        var instance = GetInstance(profile);
+        if (!instance.CanSendCommands) throw new InvalidOperationException($"Start {profile.Name} first. Chunky runs inside the server.");
+        if (!IsChunkyInstalled(profile)) throw new InvalidOperationException("Install Chunky first.");
+        var commands = ChunkyProgress.StartCommands(radius, setWorldBorder);
+        instance.Pregen = new PregenStatus("world", 0, 0, string.Empty, false, DateTimeOffset.Now);
+        foreach (var command in commands) instance.Launcher.SendCommand(command);
+        instance.AddConsole($"[Manager] Pre-generating {radius:N0} blocks around 0,0{(setWorldBorder ? $" with a {radius * 2:N0}-block world border" : string.Empty)}.");
+    }
+
+    /// <summary>Pauses, continues or cancels Chunky. Chunky remembers paused tasks across restarts.</summary>
+    public void ControlPregeneration(ServerProfile profile, string action)
+    {
+        var instance = GetInstance(profile);
+        if (!instance.CanSendCommands) throw new InvalidOperationException($"{profile.Name} isn't running.");
+        switch (action)
+        {
+            case "pause": instance.Launcher.SendCommand("chunky pause"); break;
+            case "continue": instance.Launcher.SendCommand("chunky continue"); break;
+            case "cancel":
+                instance.Launcher.SendCommand("chunky cancel");
+                instance.Launcher.SendCommand("chunky confirm");
+                instance.Pregen = null;
+                break;
+            default: throw new ArgumentOutOfRangeException(nameof(action));
+        }
+    }
+
     // ---- Bedrock crossplay (Geyser + Floodgate) ----
 
     public bool IsCrossplayInstalled(ServerProfile profile) => GeyserConfig.IsInstalled(profile, Plugins.List(profile));

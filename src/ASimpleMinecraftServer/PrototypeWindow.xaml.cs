@@ -33,7 +33,7 @@ public partial class PrototypeWindow : Window
         ["Plugin Packs"] = ("Add-ons", "Plugin Packs"), ["Bedrock Crossplay"] = ("Add-ons", "Bedrock Crossplay"), ["Datapacks"] = ("Add-ons", "Datapacks"), ["Resource Packs"] = ("Add-ons", "Resource Pack"),
         ["Performance"] = ("Health", "Performance"), ["Log Analyzer"] = ("Health", "Logs"), ["Startup Analyzer"] = ("Health", "Startup"), ["Optimization"] = ("Health", "Optimization"),
         ["Auto Backups"] = ("Backups", "Backups"), ["Scheduler"] = ("Backups", "Scheduled Tasks"),
-        ["Templates"] = ("Settings", "Presets"), ["Whitelist"] = ("Players", "Whitelist"), ["Operators"] = ("Players", "Operators"), ["About"] = ("Help", "Help")
+        ["Templates"] = ("Settings", "Presets"), ["Pre-generate"] = ("Worlds", "Pre-generate"), ["Whitelist"] = ("Players", "Whitelist"), ["Operators"] = ("Players", "Operators"), ["About"] = ("Help", "Help")
     };
     private readonly Dictionary<string, string> _selectedTabs = new(StringComparer.OrdinalIgnoreCase);
     private string? _activeTab;
@@ -42,7 +42,7 @@ public partial class PrototypeWindow : Window
     // Maps UI icon names to files in Assets/Icons (MystCraft icon pack, see docs/icons).
     private static readonly Dictionary<string, string> IconFiles = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["dashboard"]="dashboard", ["update"]="update", ["java"]="java", ["create"]="installer", ["console"]="console", ["worlds"]="worlds", ["world_card"]="worlds",
+        ["dashboard"]="dashboard", ["chunk"]="chunk", ["update"]="update", ["java"]="java", ["create"]="installer", ["console"]="console", ["worlds"]="worlds", ["world_card"]="worlds",
         ["players"]="players", ["players_nav"]="players", ["plugins_nav"]="plugins", ["plugin_card"]="plugins", ["manageplugins"]="plugins",
         ["installplugins"]="install_plugin", ["datapacks"]="datapacks", ["resourcepacks"]="resourcepacks", ["templates"]="workshop", ["pluginpacks"]="modpack",
         ["migration"]="portal", ["performance"]="performance", ["health"]="health", ["loganalyzer"]="search_logs", ["startup"]="boot",
@@ -293,7 +293,9 @@ public partial class PrototypeWindow : Window
                 "Dashboard" => BuildDashboard(),
                 "Create Server" => BuildCreateServerPage(),
                 "Console" => BuildConsolePage(),
-                "Worlds" => BuildWorldsPage(),
+                "Worlds" => Tabs("Worlds",
+                    ("Worlds", BuildWorldsPage),
+                    ("Pre-generate", BuildPregenPage)),
                 "Players" => Tabs("Players",
                     ("Online", BuildPlayersPage),
                     ("Whitelist", () => BuildPlayerListPage(PlayerListFiles.Whitelist)),
@@ -1352,6 +1354,94 @@ public partial class PrototypeWindow : Window
         root.Children.Add(BuildSoftwareUpdateCard(profile));
         var config = new ConfigurationView(); config.ResetForSelection(profile); config.ConfigurationSaved += (_, _) => _backend!.SaveProfiles(); root.Children.Add(config);
         return root;
+    }
+
+    /// <summary>
+    /// Worlds → Pre-generate: installs Chunky and generates the map ahead of time, so exploring
+    /// players don't cause lag; shows live progress from the console.
+    /// </summary>
+    private UIElement BuildPregenPage()
+    {
+        if (!TrySelected(out var profile, out var unavailable)) return unavailable;
+        if (AddonKinds.For(profile) == AddonKind.None)
+            return MessagePage("Pre-generate", $"Pre-generation uses the Chunky plugin/mod, which needs a Paper, Purpur, Folia, Fabric, Forge or NeoForge server. {profile.Name} runs {profile.Type}.");
+        var card = Card(); card.Padding = new Thickness(16);
+        var stack = new StackPanel(); card.Child = stack;
+        stack.Children.Add(TitleRow("chunk", "Pre-generate the World"));
+        stack.Children.Add(Muted("Generating the map before players explore it removes most of the lag that new terrain causes. It runs in the background on the running server and can take hours for big areas. Players can stay online, but the server is busier while it runs. Only the overworld is generated."));
+
+        if (!_backend!.IsChunkyInstalled(profile))
+        {
+            stack.Children.Add(Muted("This uses Chunky, a free plugin/mod from Modrinth."));
+            var install = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+            install.Children.Add(ActionButton("Install Chunky", async (_, _) =>
+            {
+                try { await _backend.InstallChunkyAsync(); MessageBox.Show(this, $"Chunky is installed. {(_backend.IsServerRunning(profile) ? "Restart" : "Start")} {profile.Name} to load it, then come back here.", "Chunky", MessageBoxButton.OK, MessageBoxImage.Information); Navigate("Pre-generate"); }
+                catch (Exception ex) { ShowError("Could not install Chunky", ex); }
+            }, "GreenActionButton"));
+            stack.Children.Add(install);
+            return card;
+        }
+
+        var radius = new ComboBox { IsEditable = true, ItemsSource = new[] { "1000", "2500", "5000", "10000" }, Text = "2500", Width = 110, Margin = new Thickness(6, 0, 6, 0) };
+        var border = new CheckBox { Content = "Add a world border at the edge, so players stay in the generated area", IsChecked = true, Margin = new Thickness(0, 8, 0, 0) };
+        var estimate = Muted(string.Empty);
+        void UpdateEstimate()
+        {
+            estimate.Text = int.TryParse(radius.Text, out var r) && r is >= ChunkyProgress.MinRadius and <= ChunkyProgress.MaxRadius
+                ? $"A {r * 2:N0} × {r * 2:N0} block square around 0,0: about {ChunkyProgress.EstimateChunks(r):N0} chunks and roughly {ChunkyProgress.EstimateGigabytes(r):0.#} GB of disk space."
+                : $"Enter a radius between {ChunkyProgress.MinRadius:N0} and {ChunkyProgress.MaxRadius:N0} blocks.";
+        }
+        radius.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateEstimate()));
+        radius.SelectionChanged += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateEstimate));
+        UpdateEstimate();
+        var radiusRow = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+        radiusRow.Children.Add(new TextBlock { Text = "Radius", VerticalAlignment = VerticalAlignment.Center });
+        radiusRow.Children.Add(radius);
+        radiusRow.Children.Add(new TextBlock { Text = "blocks from the centre", VerticalAlignment = VerticalAlignment.Center });
+        stack.Children.Add(radiusRow);
+        stack.Children.Add(border);
+        stack.Children.Add(estimate);
+
+        var progressText = new TextBlock { Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap };
+        var progressBar = new ProgressBar { Height = 10, Maximum = 100, Margin = new Thickness(0, 6, 0, 0) };
+        stack.Children.Add(progressText);
+        stack.Children.Add(progressBar);
+
+        var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        void Control(string action) { try { _backend.ControlPregeneration(profile, action); } catch (Exception ex) { ShowError("Pre-generation", ex); } }
+        actions.Children.Add(ActionButton("Start", (_, _) =>
+        {
+            if (!int.TryParse(radius.Text, out var r)) { MessageBox.Show(this, "Enter the radius as a number of blocks.", "Pre-generate", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            try
+            {
+                if (!Confirm($"Pre-generate about {ChunkyProgress.EstimateChunks(r):N0} chunks on {profile.Name}?\n\nThis can take a long time and roughly {ChunkyProgress.EstimateGigabytes(r):0.#} GB of disk space. You can pause it any time; Chunky carries on after a restart with Continue.")) return;
+                _backend.StartPregeneration(profile, r, border.IsChecked == true);
+            }
+            catch (Exception ex) { ShowError("Pre-generation", ex); }
+        }, "GreenActionButton"));
+        actions.Children.Add(ActionButton("Pause", (_, _) => Control("pause")));
+        actions.Children.Add(ActionButton("Continue", (_, _) => Control("continue")));
+        actions.Children.Add(ActionButton("Cancel", (_, _) => { if (Confirm("Cancel pre-generation? Chunks already generated are kept.")) Control("cancel"); }, "DangerButton"));
+        stack.Children.Add(actions);
+
+        void Refresh()
+        {
+            var running = _backend.IsServerRunning(profile);
+            var status = _backend.GetPregenStatus(profile);
+            if (!running) { progressText.Text = $"{profile.Name} is stopped. Start it to pre-generate (or Continue a paused run)."; progressBar.Value = status?.Percent ?? 0; return; }
+            if (status is null) { progressText.Text = "Not running. Choose a radius and press Start."; progressBar.Value = 0; return; }
+            progressBar.Value = status.Percent;
+            progressText.Text = status.Finished
+                ? $"Finished: {status.Chunks:N0} chunks generated."
+                : status.Chunks == 0 ? "Starting…" : $"{status.Percent:0.0}% — {status.Chunks:N0} chunks{(string.IsNullOrEmpty(status.Eta) ? string.Empty : $", about {status.Eta} left")}. Last update {status.Updated:HH:mm:ss}.";
+        }
+        Refresh();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        timer.Tick += (_, _) => Refresh();
+        card.Loaded += (_, _) => timer.Start();
+        card.Unloaded += (_, _) => timer.Stop();
+        return card;
     }
 
     /// <summary>Settings card: update the server to the newest build, or to a newer Minecraft version.</summary>
