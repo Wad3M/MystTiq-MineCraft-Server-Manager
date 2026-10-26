@@ -551,6 +551,58 @@ public sealed class NativeBackendController : IDisposable
         return (profile, kind);
     }
 
+    // ---- Whitelist and operators ----
+
+    /// <summary>
+    /// Adds a player to the whitelist or operators. Running servers get Minecraft's own command
+    /// (whitelist add / op); stopped servers have the file edited, with the UUID looked up from
+    /// Mojang (online mode) or computed the way offline-mode servers do.
+    /// </summary>
+    public async Task AddToPlayerListAsync(ServerProfile profile, string fileName, string playerName, CancellationToken cancellationToken = default)
+    {
+        var name = playerName.Trim();
+        if (!PlayerListFiles.IsValidName(name)) throw new InvalidOperationException($"'{name}' isn't a valid Minecraft name (3–16 letters, numbers or underscores).");
+        var instance = GetInstance(profile);
+        if (instance.CanSendCommands)
+        {
+            SendCommand(profile, fileName == PlayerListFiles.Ops ? $"op {name}" : $"whitelist add {name}");
+            return;
+        }
+        if (instance.IsRunning) throw new InvalidOperationException("This server was recovered after MystTiq restarted, so it can't take commands. Stop it first, then edit the list.");
+
+        string uuid;
+        if (PlayerListFiles.IsOnlineMode(profile.Folder))
+        {
+            var found = await PlayerListFiles.LookupMojangAsync(_downloads.Http, name, cancellationToken)
+                        ?? throw new InvalidOperationException($"No Minecraft account is called '{name}'. Check the spelling.");
+            (name, uuid) = found;
+        }
+        else uuid = PlayerListFiles.OfflineUuid(name);
+        PlayerListFiles.Add(profile.Folder, fileName, name, uuid);
+        instance.AddConsole($"[Manager] Added {name} to {fileName}.");
+    }
+
+    public void RemoveFromPlayerList(ServerProfile profile, string fileName, string playerName)
+    {
+        var instance = GetInstance(profile);
+        if (instance.CanSendCommands)
+        {
+            SendCommand(profile, fileName == PlayerListFiles.Ops ? $"deop {playerName}" : $"whitelist remove {playerName}");
+            return;
+        }
+        if (instance.IsRunning) throw new InvalidOperationException("This server was recovered after MystTiq restarted, so it can't take commands. Stop it first, then edit the list.");
+        if (PlayerListFiles.Remove(profile.Folder, fileName, playerName)) instance.AddConsole($"[Manager] Removed {playerName} from {fileName}.");
+    }
+
+    /// <summary>Turns the whitelist on or off (and enforce-whitelist, which kicks unlisted players).</summary>
+    public void SetWhitelistEnforced(ServerProfile profile, bool enabled)
+    {
+        var instance = GetInstance(profile);
+        if (instance.CanSendCommands) SendCommand(profile, enabled ? "whitelist on" : "whitelist off");
+        else if (instance.IsRunning) throw new InvalidOperationException("This server was recovered after MystTiq restarted, so it can't take commands. Stop it first.");
+        PlayerListFiles.SetWhitelistEnforced(profile.Folder, enabled);
+    }
+
     // ---- Bedrock crossplay (Geyser + Floodgate) ----
 
     public bool IsCrossplayInstalled(ServerProfile profile) => GeyserConfig.IsInstalled(profile, Plugins.List(profile));

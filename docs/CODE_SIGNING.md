@@ -30,6 +30,7 @@ It only connects to the internet when you use a feature that needs it:
 | Open Create Server or install a server | Mojang (`piston-meta.mojang.com`), PaperMC (`fill.papermc.io`), PurpurMC (`api.purpurmc.org`), FabricMC (`meta.fabricmc.net`) | List Minecraft versions and download the server JAR you picked |
 | Install a Modrinth modpack | The hosts the pack lists, limited to `cdn.modrinth.com`, `github.com`, `raw.githubusercontent.com` and `gitlab.com` | Download the pack's server files |
 | Search or install add-ons, or install a plugin pack | Modrinth (`api.modrinth.com`, `cdn.modrinth.com`) | Search for and download plugins or mods |
+| Add a player to the whitelist or operators while the server is stopped (online mode) | Mojang (`api.mojang.com`) | Look up the player's UUID from their name |
 | Open the EULA link | `aka.ms` in your browser | Show the Minecraft EULA |
 | Click **Open playit.gg** on the Dashboard | `playit.gg` in your browser | Show the tunnel service's download page |
 | Click **Show public address** on the Dashboard | ipify (`api.ipify.org`) | Find your network's public IP so you can share it with friends |

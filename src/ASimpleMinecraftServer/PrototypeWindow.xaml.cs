@@ -33,7 +33,7 @@ public partial class PrototypeWindow : Window
         ["Plugin Packs"] = ("Add-ons", "Plugin Packs"), ["Bedrock Crossplay"] = ("Add-ons", "Bedrock Crossplay"), ["Datapacks"] = ("Add-ons", "Datapacks"), ["Resource Packs"] = ("Add-ons", "Resource Pack"),
         ["Performance"] = ("Health", "Performance"), ["Log Analyzer"] = ("Health", "Logs"), ["Startup Analyzer"] = ("Health", "Startup"), ["Optimization"] = ("Health", "Optimization"),
         ["Auto Backups"] = ("Backups", "Backups"), ["Scheduler"] = ("Backups", "Scheduled Tasks"),
-        ["Templates"] = ("Settings", "Presets"), ["About"] = ("Help", "Help")
+        ["Templates"] = ("Settings", "Presets"), ["Whitelist"] = ("Players", "Whitelist"), ["Operators"] = ("Players", "Operators"), ["About"] = ("Help", "Help")
     };
     private readonly Dictionary<string, string> _selectedTabs = new(StringComparer.OrdinalIgnoreCase);
     private string? _activeTab;
@@ -294,7 +294,10 @@ public partial class PrototypeWindow : Window
                 "Create Server" => BuildCreateServerPage(),
                 "Console" => BuildConsolePage(),
                 "Worlds" => BuildWorldsPage(),
-                "Players" => BuildPlayersPage(),
+                "Players" => Tabs("Players",
+                    ("Online", BuildPlayersPage),
+                    ("Whitelist", () => BuildPlayerListPage(PlayerListFiles.Whitelist)),
+                    ("Operators", () => BuildPlayerListPage(PlayerListFiles.Ops))),
                 "Add-ons" => Tabs("Add-ons",
                     ("Add-ons", BuildAddonsPage),
                     ("Bedrock Crossplay", BuildCrossplayPage),
@@ -879,6 +882,75 @@ public partial class PrototypeWindow : Window
     }
 
     /// <summary>
+    /// Whitelist or operator list for the selected server: add by name, remove, and (for the
+    /// whitelist) turn it on or off. Works whether the server is running or stopped.
+    /// </summary>
+    private UIElement BuildPlayerListPage(string fileName)
+    {
+        if (!TrySelected(out var profile, out var unavailable)) return unavailable;
+        var isOps = fileName == PlayerListFiles.Ops;
+        var page = isOps ? "Operators" : "Whitelist";
+        var card = Card(); card.Padding = new Thickness(16);
+        var stack = new StackPanel(); card.Child = stack;
+        stack.Children.Add(TitleRow(isOps ? "players" : "players_nav", isOps ? "Operators (admins)" : "Whitelist"));
+        stack.Children.Add(Muted(isOps
+            ? "Operators can use admin commands in game, such as /gamemode, /kick and /stop. Only add people you trust."
+            : "With the whitelist on, only the players listed here can join. Recommended for private servers."));
+
+        if (!isOps)
+        {
+            var enforced = new CheckBox { Content = "Only allow players on the whitelist", IsChecked = PlayerListFiles.IsWhitelistEnforced(profile.Folder), Margin = new Thickness(0, 10, 0, 4) };
+            enforced.Click += (_, _) =>
+            {
+                try { _backend!.SetWhitelistEnforced(profile, enforced.IsChecked == true); }
+                catch (Exception ex) { ShowError("Could not change the whitelist", ex); }
+                Navigate(page);
+            };
+            stack.Children.Add(enforced);
+        }
+
+        var players = PlayerListFiles.Read(profile.Folder, fileName);
+        var list = new ListBox { ItemsSource = players.Select(p => isOps ? $"{p.Name}  (level {p.Level})" : p.Name).ToList(), MinHeight = 200, Margin = new Thickness(0, 8, 0, 8) };
+        stack.Children.Add(list);
+        if (players.Count == 0) stack.Children.Add(Muted(isOps ? "No operators yet." : "Nobody is on the whitelist yet."));
+
+        var row = new WrapPanel();
+        var nameBox = new TextBox { Width = 200, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Minecraft Java username" };
+        row.Children.Add(nameBox);
+        async Task AddAsync()
+        {
+            try
+            {
+                await _backend!.AddToPlayerListAsync(profile, fileName, nameBox.Text);
+                if (_backend.IsServerRunning(profile)) await Task.Delay(800); // the server writes the file itself
+            }
+            catch (Exception ex) { ShowError($"Could not add to the {page.ToLowerInvariant()}", ex); }
+            Navigate(page);
+        }
+        row.Children.Add(ActionButton(isOps ? "Make Operator" : "Add to Whitelist", async (_, _) => await AddAsync(), "GreenActionButton"));
+        nameBox.KeyDown += async (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) await AddAsync(); };
+        row.Children.Add(ActionButton("Remove Selected", async (_, _) =>
+        {
+            if (list.SelectedIndex < 0) return;
+            var player = players[list.SelectedIndex];
+            try
+            {
+                _backend!.RemoveFromPlayerList(profile, fileName, player.Name);
+                if (_backend.IsServerRunning(profile)) await Task.Delay(800);
+            }
+            catch (Exception ex) { ShowError("Could not remove the player", ex); }
+            Navigate(page);
+        }, "DangerButton"));
+        stack.Children.Add(row);
+        stack.Children.Add(Muted(_backend!.IsServerRunning(profile)
+            ? "The server is running, so changes are sent as Minecraft commands and apply straight away."
+            : PlayerListFiles.IsOnlineMode(profile.Folder)
+                ? "The server is stopped. Names are checked with Mojang when you add them, and changes apply at the next start."
+                : "The server is stopped and in offline mode. Changes apply at the next start."));
+        return card;
+    }
+
+    /// <summary>
     /// One page for server add-ons: plugins on Paper/Purpur/Folia, mods on Fabric.
     /// Shows what's installed and a Modrinth search filtered to what this server can run.
     /// </summary>
@@ -1435,7 +1507,7 @@ public partial class PrototypeWindow : Window
         "Dashboard" => "All your servers at a glance",
         "Create Server" => "Install a new server or add an existing one",
         "Console" => "Live output and commands for the selected server",
-        "Players" => "Who's online, with op, kick, and ban",
+        "Players" => "Who's online, the whitelist, and operators",
         "Worlds" => "Import, rename, archive, and delete worlds",
         "Add-ons" => "Plugins or mods, Bedrock crossplay, plugin packs, datapacks, and the resource pack",
         "Backups" => "Manual and automatic backups, and scheduled tasks",

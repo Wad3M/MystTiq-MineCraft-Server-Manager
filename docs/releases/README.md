@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.9.0** (current) | [Bedrock crossplay with Geyser and Floodgate](RELEASE_NOTES_v0.9.0.md) |
+| **0.10.0** (current) | [Whitelist and operators editor](RELEASE_NOTES_v0.10.0.md) |
+| 0.9.0 | [Bedrock crossplay with Geyser and Floodgate](RELEASE_NOTES_v0.9.0.md) |
 | 0.8.0 | [Modrinth modpack (.mrpack) import](RELEASE_NOTES_v0.8.0.md) |
 | 0.7.0 | [Connect without port forwarding: Tailscale, ZeroTier, Hamachi, Radmin, playit.gg](RELEASE_NOTES_v0.7.0.md) |
 | 0.6.0 | [Crash auto-restart](RELEASE_NOTES_v0.6.0.md) |

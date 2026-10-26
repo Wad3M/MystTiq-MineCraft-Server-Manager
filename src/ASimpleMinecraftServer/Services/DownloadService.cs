@@ -15,6 +15,9 @@ public sealed class DownloadService : IDisposable
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"MystTiq-MineCraft-Server-Manager/{version} (github.com/Wad3M/MystTiq-MineCraft-Server-Manager)");
     }
 
+    /// <summary>The shared client (with the app's User-Agent) for small API lookups.</summary>
+    public HttpClient Http => _httpClient;
+
     public Task<string> GetStringAsync(string url, CancellationToken cancellationToken = default) =>
         _httpClient.GetStringAsync(url, cancellationToken);
 
