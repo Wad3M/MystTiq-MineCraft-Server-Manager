@@ -4,11 +4,12 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.11.0, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.12.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
 - **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, Fabric, Forge, or NeoForge (checked against the provider's published checksum), or uses your own JAR. It picks a free port and writes a starting `server.properties` for you.
+- **Java handled for you.** MystTiq checks each server has the Java its Minecraft version needs and, if not, downloads the right one (Eclipse Temurin, SHA-256 checked) into its own folder.
 - **Run several servers at once.** Each server has its own folder, version, memory limit, Java path, console, and player list. The dashboard shows them all with Start/Stop buttons.
 - **Port conflict check.** A server won't start if its port is already taken.
 - **How to connect.** The dashboard shows the address to join from this PC, your home network, the internet, and private networks like Tailscale, ZeroTier, Hamachi or Radmin VPN, with Copy buttons and playit.gg guidance if you can't port forward.
@@ -29,7 +30,7 @@ Get the latest `.exe` from the [Releases page](https://github.com/Wad3M/MystTiq-
 
 Windows may show "Windows protected your PC" because the file isn't code-signed. Click **More info → Run anyway**.
 
-To start Minecraft servers you also need **Java 21** (for example from [Adoptium](https://adoptium.net)).
+Minecraft servers need Java. If your PC doesn't have the right version, MystTiq offers to download it (Eclipse Temurin from [Adoptium](https://adoptium.net)) and sets the server to use it.
 
 ## Build from source
 
@@ -109,4 +110,4 @@ Windows releases are being set up for free code signing through [SignPath Founda
 
 ## Release notes
 
-The latest is [v0.11.0](docs/releases/RELEASE_NOTES_v0.11.0.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.12.0](docs/releases/RELEASE_NOTES_v0.12.0.md). See [`docs/releases/`](docs/releases/) for all versions.

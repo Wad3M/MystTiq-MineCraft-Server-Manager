@@ -48,9 +48,9 @@ public sealed class DownloadService : IDisposable
     /// Downloads a server JAR and, when the provider published a checksum, deletes the file and
     /// throws if it does not match.
     /// </summary>
-    public async Task DownloadVerifiedAsync(ServerDownload download, string destination, CancellationToken cancellationToken = default)
+    public async Task DownloadVerifiedAsync(ServerDownload download, string destination, CancellationToken cancellationToken = default, IProgress<double>? progress = null)
     {
-        await DownloadFileAsync(download.Url, destination, cancellationToken);
+        await DownloadFileAsync(download.Url, destination, progress, cancellationToken);
         if (string.IsNullOrWhiteSpace(download.Hash)) return;
 
         byte[] actual;

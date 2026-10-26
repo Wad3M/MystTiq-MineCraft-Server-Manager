@@ -541,21 +541,71 @@ public partial class PrototypeWindow : Window
     }
 
     /// <summary>
-    /// Checks the server's Java before starting. Missing Java blocks the start; an older Java than
-    /// the Minecraft version needs asks first, since the server would almost certainly fail.
+    /// Checks the server's Java before starting. When it's missing or too old, MystTiq uses (or
+    /// offers to download) the right Temurin runtime and points the server at it.
     /// </summary>
     private async Task<bool> ConfirmJavaAsync(ServerProfile profile)
     {
-        var result = await ASimpleMinecraftServer.Services.JavaDetector.ValidateAsync(profile.JavaPath, profile.Version);
-        if (result.IsValid) return true;
-        if (result.Installation is null)
-        {
-            MessageBox.Show(this, $"{result.Message}\n\nInstall Java {result.RequiredMajorVersion} (for example from adoptium.net), or set the Java path in this server's Settings.", "Java not found", MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
-        }
+        var java = await ResolveJavaAsync(profile.JavaPath, profile.Version);
+        if (java is null) return false;
+        _backend?.SetJavaPath(profile, java);
+        return true;
+    }
+
+    /// <summary>
+    /// The java.exe to use for a Minecraft version: <paramref name="javaPath"/> when it works, else a
+    /// Java MystTiq already downloaded, else (if the user agrees) a fresh Temurin download. Null means don't go ahead.
+    /// </summary>
+    private async Task<string?> ResolveJavaAsync(string? javaPath, string? minecraftVersion)
+    {
+        javaPath = string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim();
+        var result = await JavaDetector.ValidateAsync(javaPath, minecraftVersion);
+        if (result.IsValid) return javaPath;
         // Versions MystTiq cannot read (custom or imported servers) are only checked for a working Java.
-        if (!System.Text.RegularExpressions.Regex.IsMatch(profile.Version ?? string.Empty, @"^\d+\.\d+")) return true;
-        return MessageBox.Show(this, $"{result.Message}\n\nThe server will most likely fail to start. Start anyway?", "Java version", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        var versionKnown = System.Text.RegularExpressions.Regex.IsMatch(minecraftVersion ?? string.Empty, @"^\d+\.\d+");
+        if (result.Installation is { MajorVersion: > 0 } && !versionKnown) return javaPath;
+        if (_backend is null) return null;
+
+        var needed = JavaRuntimeService.RuntimeFor(result.RequiredMajorVersion);
+        if (_backend.JavaRuntimes.FindInstalled(needed) is { } downloaded) return downloaded;
+
+        var download = MessageBox.Show(this,
+            $"{result.Message}\n\nDownload Java {needed} now? MystTiq gets Eclipse Temurin from adoptium.net (about 50 MB, SHA-256 checked) and keeps it in its own folder for your servers. Nothing else on your PC changes.",
+            "Java needed", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (download == MessageBoxResult.Yes)
+        {
+            try { return await RunWithProgressAsync($"Getting Java {needed}", progress => _backend.JavaRuntimes.EnsureAsync(needed, progress)); }
+            catch (Exception ex) { ShowError("Java download failed", ex); return null; }
+        }
+        if (result.Installation is null) return null;
+        return MessageBox.Show(this, $"{result.Message}\n\nThe server will most likely fail to start. Continue anyway?", "Java version", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes
+            ? javaPath : null;
+    }
+
+    /// <summary>Runs a long task behind a small progress window; the main window is disabled meanwhile.</summary>
+    private async Task<T> RunWithProgressAsync<T>(string title, Func<IProgress<string>, Task<T>> work)
+    {
+        var text = new TextBlock { Text = title + "…", TextWrapping = TextWrapping.Wrap };
+        var bar = new ProgressBar { IsIndeterminate = true, Height = 8, Margin = new Thickness(0, 12, 0, 0) };
+        var panel = new StackPanel { Margin = new Thickness(16) };
+        panel.Children.Add(text); panel.Children.Add(bar);
+        var window = new Window
+        {
+            Title = title, Owner = this, Width = 460, SizeToContent = SizeToContent.Height, Content = panel,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize, WindowStyle = WindowStyle.ToolWindow,
+            Background = (Brush)FindResource("AppBackground"), Foreground = (Brush)FindResource("TextBrush")
+        };
+        var finished = false;
+        window.Closing += (_, e) => { if (!finished) e.Cancel = true; };
+        IsEnabled = false;
+        window.Show();
+        try { return await work(new Progress<string>(message => text.Text = message)); }
+        finally
+        {
+            finished = true;
+            window.Close();
+            IsEnabled = true;
+        }
     }
 
     private async Task RunServerAction(string action, ServerProfile profile, Func<NativeBackendController, Task> work)
@@ -753,6 +803,14 @@ public partial class PrototypeWindow : Window
                 return;
             }
 
+            // Forge/NeoForge installers and the first start need a suitable Java; fix that up front.
+            if (!selectedType.Equals("Custom JAR", StringComparison.OrdinalIgnoreCase))
+            {
+                var resolvedJava = await ResolveJavaAsync(java.Text, selectedVersion);
+                if (resolvedJava is null) { status.Text = "Install cancelled: no suitable Java."; return; }
+                java.Text = resolvedJava;
+            }
+
             try
             {
                 installButton.IsEnabled = false;
@@ -797,6 +855,13 @@ public partial class PrototypeWindow : Window
             if (!int.TryParse(memory.Text, out var gb)) gb = 6;
             if (!int.TryParse(port.Text, out var serverPort) || serverPort is < 1 or > 65535) { status.Text = "Enter a port between 1 and 65535."; return; }
             if (eula.IsChecked != true) { status.Text = "Accept the Minecraft EULA to install a server."; return; }
+            try
+            {
+                var packJava = await ResolveJavaAsync(java.Text, ModpackReader.Read(pack).MinecraftVersion);
+                if (packJava is null) { status.Text = "Install cancelled: no suitable Java."; return; }
+                java.Text = packJava;
+            }
+            catch (Exception ex) { status.Text = $"Modpack install failed: {ex.Message}"; return; }
             try
             {
                 modpackButton.IsEnabled = false; installButton!.IsEnabled = false;
@@ -1259,7 +1324,18 @@ public partial class PrototypeWindow : Window
         crashRow.Children.Add(new TextBlock { Text = "minutes, waiting", VerticalAlignment = VerticalAlignment.Center }); crashRow.Children.Add(crashDelay);
         crashRow.Children.Add(new TextBlock { Text = "seconds first", VerticalAlignment = VerticalAlignment.Center });
         stack.Children.Add(crashRestart); stack.Children.Add(crashRow); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
-        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; try
+        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; }));
+        var neededJava = JavaRuntimeService.RuntimeFor(JavaDetector.GetRequiredMajorVersion(mcVersion.Text));
+        buttons.Children.Add(ActionButton($"Download Java {neededJava}", async (_, _) =>
+        {
+            try
+            {
+                var path = await RunWithProgressAsync($"Getting Java {neededJava}", progress => _backend!.JavaRuntimes.EnsureAsync(neededJava, progress));
+                _backend!.SetJavaPath(profile, path);
+                Navigate("Settings");
+            }
+            catch (Exception ex) { ShowError("Java download failed", ex); }
+        })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; try
             {
                 _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text, serverType.Text, mcVersion.Text);
                 _backend.SetCrashRecovery(profile, crashRestart.IsChecked == true,

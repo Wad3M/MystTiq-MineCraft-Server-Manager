@@ -65,6 +65,7 @@ public sealed class NativeBackendController : IDisposable
         _versions = new VersionManager(_downloads);
         _serverInstaller = new ServerInstaller(_downloads, _versions);
         Network = new NetworkAddressService(_downloads);
+        JavaRuntimes = new JavaRuntimeService(_downloads);
 
         DataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ASimpleMinecraftServer");
         Directory.CreateDirectory(DataDirectory);
@@ -282,6 +283,20 @@ public sealed class NativeBackendController : IDisposable
         SaveProfiles();
         SelectServer(profile);
         return profile;
+    }
+
+    /// <summary>Java runtimes MystTiq downloads for servers (Eclipse Temurin from Adoptium).</summary>
+    public JavaRuntimeService JavaRuntimes { get; }
+
+    /// <summary>Points a server at a different java.exe (e.g. one MystTiq downloaded) and saves.</summary>
+    public void SetJavaPath(ServerProfile profile, string javaPath)
+    {
+        if (string.Equals(profile.JavaPath, javaPath, StringComparison.OrdinalIgnoreCase)) return;
+        profile.JavaPath = javaPath;
+        profile.RefreshDerivedProperties();
+        SaveProfiles();
+        GetInstance(profile).AddConsole($"[Manager] Java for this server set to {javaPath}.");
+        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void UpdateSelectedProfile(string name, int memoryGb, string javaPath, string jar, string type, string version)
