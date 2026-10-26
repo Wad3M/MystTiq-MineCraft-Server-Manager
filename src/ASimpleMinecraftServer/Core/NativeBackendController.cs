@@ -59,6 +59,8 @@ public sealed class NativeBackendController : IDisposable
     public event EventHandler? StateChanged;
     public event EventHandler<string>? ConsoleLineReceived;
     public event EventHandler? PlayersChanged;
+    /// <summary>A server exited with an error nobody asked for. Raised on a background thread.</summary>
+    public event EventHandler<ServerProfile>? ServerCrashed;
 
     public NativeBackendController()
     {
@@ -434,6 +436,13 @@ public sealed class NativeBackendController : IDisposable
         if (!enabled) GetInstance(profile).CancelPendingRestart();
         SaveProfiles();
         StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SetAutoStart(ServerProfile profile, bool enabled)
+    {
+        if (profile.AutoStart == enabled) return;
+        profile.AutoStart = enabled;
+        SaveProfiles();
     }
 
     public void SendCommand(string command) => SendCommand(RequireSelected(), command);
@@ -885,7 +894,11 @@ public sealed class NativeBackendController : IDisposable
         profile.RuntimeState = e.StopWasRequested ? "Stopped" : "Failed";
         var text = e.WasForceKilled ? "force killed" : e.StopWasRequested ? "stopped" : "exited unexpectedly";
         instance.AddConsole($"[Manager] Server {text}{(e.ExitCode is int code ? $" (exit code {code})" : string.Empty)}.");
-        if (CrashRestartPolicy.IsCrash(e) && profile.CrashRecoveryEnabled) ScheduleCrashRestart(instance);
+        if (CrashRestartPolicy.IsCrash(e))
+        {
+            if (profile.CrashRecoveryEnabled) ScheduleCrashRestart(instance);
+            ServerCrashed?.Invoke(this, profile);
+        }
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 

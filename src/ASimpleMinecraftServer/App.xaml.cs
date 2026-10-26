@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -8,6 +9,11 @@ namespace ASimpleMinecraftServer;
 
 public partial class App : Application
 {
+    // One MystTiq per Windows user: a second launch just brings the first window forward.
+    private const string InstanceName = "MystTiq-MineCraft-Server-Manager";
+    private Mutex? _instanceMutex;
+    private EventWaitHandle? _showSignal;
+
     private static string StartupLogPath => Path.Combine(AppContext.BaseDirectory, "MystTiq_startup.log");
 
     protected override void OnStartup(StartupEventArgs e)
@@ -21,9 +27,34 @@ public partial class App : Application
             WriteStartupLog("MystTiq application startup beginning.");
             base.OnStartup(e);
 
-            var shell = new PrototypeWindow();
+            var user = Environment.UserName;
+            _instanceMutex = new Mutex(initiallyOwned: true, $@"Local\{InstanceName}-{user}", out var firstInstance);
+            _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, $@"Local\{InstanceName}-{user}-show");
+            if (!firstInstance)
+            {
+                _showSignal.Set();
+                WriteStartupLog("MystTiq is already running; asked it to show its window.");
+                Shutdown(0);
+                return;
+            }
+
+            var startHidden = Array.Exists(e.Args, arg => arg.Equals(Services.WindowsStartup.MinimizedArgument, StringComparison.OrdinalIgnoreCase));
+            var shell = new PrototypeWindow { StartHidden = startHidden };
+            if (startHidden)
+            {
+                shell.WindowState = WindowState.Minimized;
+                shell.ShowInTaskbar = false;
+            }
             MainWindow = shell;
             shell.Show();
+
+            var signal = _showSignal;
+            var listener = new Thread(() =>
+            {
+                try { while (signal.WaitOne()) Dispatcher.BeginInvoke(new Action(shell.ShowFromTray)); }
+                catch (ObjectDisposedException) { }
+            }) { IsBackground = true, Name = "MystTiq show-window listener" };
+            listener.Start();
             WriteStartupLog("MystTiq polished shell displayed.");
         }
         catch (Exception ex)
@@ -36,6 +67,14 @@ public partial class App : Application
                 MessageBoxImage.Error);
             Shutdown(-1);
         }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _showSignal?.Dispose();
+        try { _instanceMutex?.ReleaseMutex(); } catch (ApplicationException) { }
+        _instanceMutex?.Dispose();
+        base.OnExit(e);
     }
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

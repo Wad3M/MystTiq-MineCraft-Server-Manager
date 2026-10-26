@@ -1,6 +1,7 @@
 using ASimpleMinecraftServer.Core;
 using ASimpleMinecraftServer.Models;
 using ASimpleMinecraftServer.Services;
+using ASimpleMinecraftServer.UI;
 using ASimpleMinecraftServer.UI.Pages;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
@@ -68,6 +69,14 @@ public partial class PrototypeWindow : Window
     private readonly List<(Button Button, FrameworkElement Icon, TextBlock Label)> _navItems = new();
     private readonly List<(Expander Section, string Title)> _navSections = new();
     private bool _allowClose;
+    // System tray: closing the window hides it there while servers keep running.
+    private TrayIcon? _tray;
+    private AppSettingsStore? _appSettingsStore;
+    private AppSettings _appSettings = new();
+    private bool _exitRequested;
+
+    /// <summary>Started at Windows sign-in: go straight to the tray instead of showing the window.</summary>
+    public bool StartHidden { get; init; }
     private bool _updatingServerPicker;
     private string _currentPage = "Dashboard";
     private DateTimeOffset? _lastCpuSampleAt;
@@ -120,6 +129,19 @@ public partial class PrototypeWindow : Window
                 App.WriteStartupLog(warning);
                 MessageBox.Show(this, warning, "Server list recovered", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+
+            _appSettingsStore = new AppSettingsStore(_backend.DataDirectory);
+            _appSettings = _appSettingsStore.Load();
+            try { _tray = new TrayIcon(ShowFromTray, ExitFromTray); }
+            catch (Exception trayError) { App.WriteStartupLog("System tray icon could not be created", trayError); }
+            _backend.ServerCrashed += Backend_ServerCrashed;
+            if (StartHidden)
+            {
+                ShowInTaskbar = true;
+                if (_tray is not null) Hide();
+                WindowState = WindowState.Normal;
+            }
+            _ = StartAutoStartServersAsync();
         }
         catch (Exception ex)
         {
@@ -130,6 +152,14 @@ public partial class PrototypeWindow : Window
 
     protected override async void OnClosing(CancelEventArgs e)
     {
+        var exiting = _exitRequested;
+        _exitRequested = false;
+        if (!_allowClose && !exiting && _backend is not null && _tray is not null && _appSettings.CloseToTray)
+        {
+            e.Cancel = true;
+            HideToTray();
+            return;
+        }
         if (_allowClose || _backend is null)
         {
             base.OnClosing(e);
@@ -183,12 +213,103 @@ public partial class PrototypeWindow : Window
     {
         _statusTimer?.Stop();
         _statusTimer = null;
+        _tray?.Dispose();
+        _tray = null;
         if (_backend is null) return;
+        _backend.ServerCrashed -= Backend_ServerCrashed;
         _backend.StateChanged -= Backend_StateChanged;
         _backend.ConsoleLineReceived -= Backend_ConsoleLineReceived;
         _backend.PlayersChanged -= Backend_PlayersChanged;
         _backend.Dispose();
         _backend = null;
+    }
+
+    private void HideToTray()
+    {
+        Hide();
+        if (_appSettings.TrayTipShown || _tray is null) return;
+        _tray.Notify("MystTiq is still running", "Your servers keep running. Double-click the MystTiq icon to open it, or right-click it and choose Exit to quit.");
+        _appSettings.TrayTipShown = true;
+        SaveAppSettings();
+    }
+
+    /// <summary>Brings the window back from the tray (also used when MystTiq is launched a second time).</summary>
+    public void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ExitFromTray()
+    {
+        ShowFromTray();
+        _exitRequested = true;
+        Close();
+    }
+
+    private void SaveAppSettings()
+    {
+        try { _appSettingsStore?.Save(_appSettings); }
+        catch (Exception ex) { App.WriteStartupLog("Could not save app settings", ex); }
+    }
+
+    private void Backend_ServerCrashed(object? sender, ServerProfile profile) => Dispatcher.BeginInvoke(() =>
+    {
+        if (IsVisible && IsActive) return;
+        _tray?.Notify($"{profile.Name} crashed",
+            profile.CrashRecoveryEnabled ? "MystTiq is restarting it automatically." : "Open MystTiq and check Health → Logs to see why.", warning: true);
+    });
+
+    /// <summary>
+    /// Starts servers marked "Start when MystTiq opens". Runs quietly: when a server's Java is
+    /// wrong and MystTiq already downloaded the right one, that one is used; problems go to the tray.
+    /// </summary>
+    private async Task StartAutoStartServersAsync()
+    {
+        if (_backend is null) return;
+        foreach (var profile in _backend.Servers.Where(p => p.AutoStart && !_backend.IsServerRunning(p)).ToList())
+        {
+            try
+            {
+                var check = await JavaDetector.ValidateAsync(profile.JavaPath, profile.Version);
+                if (!check.IsValid && _backend.JavaRuntimes.FindInstalled(JavaRuntimeService.RuntimeFor(check.RequiredMajorVersion)) is { } java)
+                    _backend.SetJavaPath(profile, java);
+                await _backend.StartAsync(profile);
+            }
+            catch (Exception ex)
+            {
+                App.WriteStartupLog($"Auto-start of {profile.Name} failed", ex);
+                _tray?.Notify($"{profile.Name} didn't start", ex.Message, warning: true);
+            }
+        }
+    }
+
+    /// <summary>Settings → App: tray and Windows sign-in options for MystTiq itself.</summary>
+    private UIElement BuildAppSettingsPage()
+    {
+        var card = Card(); card.Padding = new Thickness(16);
+        var stack = new StackPanel(); card.Child = stack;
+        stack.Children.Add(TitleRow("settings_nav", "MystTiq"));
+        var closeToTray = new CheckBox { Content = "Keep MystTiq running in the system tray when I close the window", IsChecked = _appSettings.CloseToTray, Margin = new Thickness(0, 8, 0, 0) };
+        closeToTray.Click += (_, _) => { _appSettings.CloseToTray = closeToTray.IsChecked == true; SaveAppSettings(); };
+        stack.Children.Add(closeToTray);
+        stack.Children.Add(Muted("Servers keep running while the window is hidden. Double-click the tray icon to open MystTiq, or right-click it and choose Exit to quit (running servers are stopped safely first)."));
+
+        bool signInEnabled;
+        try { signInEnabled = WindowsStartup.IsEnabled(); } catch { signInEnabled = false; }
+        var signIn = new CheckBox { Content = "Start MystTiq in the tray when I sign in to Windows", IsChecked = signInEnabled, Margin = new Thickness(0, 12, 0, 0) };
+        signIn.Click += (_, _) =>
+        {
+            try { WindowsStartup.Set(signIn.IsChecked == true); }
+            catch (Exception ex) { signIn.IsChecked = !signIn.IsChecked; ShowError("Could not change Windows sign-in start", ex); }
+        };
+        stack.Children.Add(signIn);
+        var autoStart = _backend?.Servers.Where(p => p.AutoStart).Select(p => p.Name).ToList() ?? [];
+        stack.Children.Add(Muted(autoStart.Count == 0
+            ? "No servers start automatically yet. Tick \"Start this server when MystTiq opens\" in a server's Settings → Server tab."
+            : $"These servers start when MystTiq opens: {string.Join(", ", autoStart)}."));
+        return card;
     }
 
     private void ShowStartupFailure(Exception ex)
@@ -317,7 +438,8 @@ public partial class PrototypeWindow : Window
                     ("Optimization", BuildOptimizationPage)),
                 "Settings" => Tabs("Settings",
                     ("Server", BuildSettingsPage),
-                    ("Presets", BuildTemplatesPage)),
+                    ("Presets", BuildTemplatesPage),
+                    ("App", BuildAppSettingsPage)),
                 "Help" => BuildHelpPage(),
                 _ => MessagePage(page, "This page is not available.")
             };
@@ -1325,6 +1447,8 @@ public partial class PrototypeWindow : Window
         crashRow.Children.Add(new TextBlock { Text = "restarts within", VerticalAlignment = VerticalAlignment.Center }); crashRow.Children.Add(crashWindow);
         crashRow.Children.Add(new TextBlock { Text = "minutes, waiting", VerticalAlignment = VerticalAlignment.Center }); crashRow.Children.Add(crashDelay);
         crashRow.Children.Add(new TextBlock { Text = "seconds first", VerticalAlignment = VerticalAlignment.Center });
+        var autoStartBox = new CheckBox { Content = "Start this server when MystTiq opens", IsChecked = profile.AutoStart, Margin = new Thickness(0, 4, 0, 8), ToolTip = "With \"Start MystTiq when I sign in to Windows\" (Settings → App), the server is back up after a reboot." };
+        stack.Children.Add(autoStartBox);
         stack.Children.Add(crashRestart); stack.Children.Add(crashRow); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
         var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; }));
         var neededJava = JavaRuntimeService.RuntimeFor(JavaDetector.GetRequiredMajorVersion(mcVersion.Text));
@@ -1344,6 +1468,7 @@ public partial class PrototypeWindow : Window
                     int.TryParse(crashLimit.Text, out var limit) ? limit : profile.CrashRestartLimit,
                     int.TryParse(crashWindow.Text, out var window) ? window : profile.CrashRestartWindowMinutes,
                     int.TryParse(crashDelay.Text, out var delay) ? delay : profile.CrashRestartDelaySeconds);
+                _backend.SetAutoStart(profile, autoStartBox.IsChecked == true);
             } catch (Exception ex) { ShowError("Could not save the profile", ex); } Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder)));
         buttons.Children.Add(ActionButton("Remove from List…", (_, _) =>
         {

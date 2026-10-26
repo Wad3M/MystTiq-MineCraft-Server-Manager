@@ -21,6 +21,8 @@ public sealed class ServerProfile : INotifyPropertyChanged
     public int BackupRetentionCount { get; set; } = 10;
     public DateTimeOffset? LastAutomaticBackupAt { get; set; }
     public bool CrashRecoveryEnabled { get; set; } = true;
+    /// <summary>Start this server automatically when MystTiq opens (e.g. at Windows sign-in).</summary>
+    public bool AutoStart { get; set; }
     public int CrashRestartLimit { get; set; } = 3;
     public int CrashRestartWindowMinutes { get; set; } = 15;
     public int CrashRestartDelaySeconds { get; set; } = 10;

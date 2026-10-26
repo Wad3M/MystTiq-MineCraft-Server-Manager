@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.14.0** (current) | [Pre-generate the world](RELEASE_NOTES_v0.14.0.md) |
+| **0.15.0** (current) | [System tray and start with Windows](RELEASE_NOTES_v0.15.0.md) |
+| 0.14.0 | [Pre-generate the world](RELEASE_NOTES_v0.14.0.md) |
 | 0.13.0 | [Update server software](RELEASE_NOTES_v0.13.0.md) |
 | 0.12.0 | [Automatic Java download](RELEASE_NOTES_v0.12.0.md) |
 | 0.11.0 | [Forge and NeoForge server types](RELEASE_NOTES_v0.11.0.md) |

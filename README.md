@@ -4,11 +4,12 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.14.0, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.15.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
 - **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, Fabric, Forge, or NeoForge (checked against the provider's published checksum), or uses your own JAR. It picks a free port and writes a starting `server.properties` for you.
+- **Runs in the background.** Close the window and MystTiq stays in the system tray with your servers running. Optionally start it when you sign in to Windows and have chosen servers start on their own, with a notification if one crashes.
 - **Pre-generate the world.** Generate the map ahead of time with Chunky (installed for you), with live progress and an optional world border, so exploring players don't cause lag.
 - **One-click updates.** Update a server to the newest build or a newer Minecraft version from Settings. A backup is made first, and installed add-ons are checked for the new version.
 - **Java handled for you.** MystTiq checks each server has the Java its Minecraft version needs and, if not, downloads the right one (Eclipse Temurin, SHA-256 checked) into its own folder.
@@ -112,4 +113,4 @@ Windows releases are being set up for free code signing through [SignPath Founda
 
 ## Release notes
 
-The latest is [v0.14.0](docs/releases/RELEASE_NOTES_v0.14.0.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.15.0](docs/releases/RELEASE_NOTES_v0.15.0.md). See [`docs/releases/`](docs/releases/) for all versions.
