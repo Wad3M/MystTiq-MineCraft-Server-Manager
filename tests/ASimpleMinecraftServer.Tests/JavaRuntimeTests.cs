@@ -66,7 +66,7 @@ public class JavaRuntimeTests
         dir.File("temurin-21/.download-abc/x/bin/java.exe");
         Assert.Null(service.FindInstalled(21));
         var java = dir.File("temurin-21/jdk-21.0.5_11-jre/bin/java.exe");
-        Assert.Equal(java, service.FindInstalled(21));
+        Assert.Equal(Path.GetFullPath(java), Path.GetFullPath(service.FindInstalled(21)!));
         Assert.Null(service.FindInstalled(17));
     }
 }
