@@ -18,6 +18,7 @@ public static partial class GeyserConfig
         Path.Combine("plugins", "Geyser-Spigot", "config.yml"),
         Path.Combine("plugins", "Geyser-Paper", "config.yml"),
         Path.Combine("config", "Geyser-Fabric", "config.yml"),
+        Path.Combine("config", "Geyser-NeoForge", "config.yml"),
         Path.Combine("config", "geyser", "config.yml"),
     ];
 

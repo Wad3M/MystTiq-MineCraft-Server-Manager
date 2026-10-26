@@ -665,6 +665,8 @@ public partial class PrototypeWindow : Window
                 "Purpur" => "PurpurMC Downloads API • latest build for the selected Minecraft version • installed as server.jar",
                 "Folia" => "PaperMC Downloads Service (Folia) • installed as server.jar",
                 "Fabric" => "Fabric Metadata API executable server launcher • installed as server.jar",
+                "Forge" => "Official Forge installer (maven.minecraftforge.net, SHA-1 checked) • runs once with Java, takes a few minutes",
+                "NeoForge" => "Official NeoForge installer (maven.neoforged.net, SHA-1 checked) • runs once with Java, takes a few minutes",
                 "Custom JAR" => "Local JAR selected below • copied into the server folder as server.jar",
                 _ => "Automatic server download"
             };
@@ -959,7 +961,7 @@ public partial class PrototypeWindow : Window
         if (!TrySelected(out var profile, out var unavailable)) return unavailable;
         var kind = AddonKinds.For(profile);
         if (kind == AddonKind.None)
-            return MessagePage("Add-ons", $"{profile.Type} servers can't load plugins or mods.\n\nTo use add-ons, create a Paper, Purpur, or Folia server (plugins) or a Fabric server (mods). If this server already is one of those, set its type in Settings.");
+            return MessagePage("Add-ons", $"{profile.Type} servers can't load plugins or mods.\n\nTo use add-ons, create a Paper, Purpur, or Folia server (plugins) or a Fabric, Forge or NeoForge server (mods). If this server already is one of those, set its type in Settings.");
 
         var noun = AddonKinds.Noun(kind);
         var nouns = noun + "s";
@@ -990,7 +992,7 @@ public partial class PrototypeWindow : Window
         var browse = new StackPanel(); browseCard.Child = browse;
         browse.Children.Add(TitleRow("search", $"Find {nouns} on Modrinth"));
         browse.Children.Add(Muted($"Only server-side {nouns} for {profile.Type} {profile.Version} are shown. Every download is checked against Modrinth's SHA-512 hash."));
-        if (kind == AddonKind.Mod)
+        if (profile.Type.Equals("Fabric", StringComparison.OrdinalIgnoreCase))
         {
             var fabricApiInstalled = _backend.Plugins.List(profile).Any(p => p.FileName.StartsWith("fabric-api", StringComparison.OrdinalIgnoreCase));
             if (!fabricApiInstalled)
@@ -1050,8 +1052,8 @@ public partial class PrototypeWindow : Window
     private UIElement BuildCrossplayPage()
     {
         if (!TrySelected(out var profile, out var unavailable)) return unavailable;
-        if (AddonKinds.For(profile) == AddonKind.None || profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase))
-            return MessagePage("Bedrock Crossplay", $"Crossplay needs a Paper, Purpur or Fabric server. {profile.Name} runs {profile.Type}.");
+        if (AddonKinds.For(profile) == AddonKind.None || profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase) || profile.Type.Equals("Forge", StringComparison.OrdinalIgnoreCase))
+            return MessagePage("Bedrock Crossplay", $"Crossplay needs a Paper, Purpur, Fabric or NeoForge server. {profile.Name} runs {profile.Type}.");
 
         var card = Card(); card.Padding = new Thickness(16);
         var stack = new StackPanel(); card.Child = stack;
@@ -1241,7 +1243,7 @@ public partial class PrototypeWindow : Window
         var card = Card(); card.Padding = new Thickness(16); var stack = new StackPanel(); stack.Children.Add(TitleRow("settings_nav", "Server Profile"));
         var name = new TextBox { Text = profile.Name, Margin = new Thickness(0, 3, 0, 8) }; var memory = new TextBox { Text = profile.MemoryGb.ToString(), Margin = new Thickness(0, 3, 0, 8) }; var java = new TextBox { Text = profile.JavaPath, Margin = new Thickness(0, 3, 0, 8) }; var jar = new TextBox { Text = profile.Jar, Margin = new Thickness(0, 3, 0, 8) };
         // Type and version drive add-on compatibility and the Java check; imported servers only have a guess.
-        var serverType = new ComboBox { IsEditable = true, ItemsSource = new[] { "Vanilla", "Paper", "Purpur", "Folia", "Fabric", "Custom JAR" }, Text = profile.Type, Margin = new Thickness(0, 3, 0, 8) };
+        var serverType = new ComboBox { IsEditable = true, ItemsSource = VersionManager.SupportedServerTypes, Text = profile.Type, Margin = new Thickness(0, 3, 0, 8) };
         var mcVersion = new TextBox { Text = profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase) ? string.Empty : profile.Version, Margin = new Thickness(0, 3, 0, 8), ToolTip = "The Minecraft version this server runs, e.g. 1.21.4" };
         stack.Children.Add(new TextBlock { Text = "Name" }); stack.Children.Add(name);
         stack.Children.Add(new TextBlock { Text = "Server type" }); stack.Children.Add(serverType);

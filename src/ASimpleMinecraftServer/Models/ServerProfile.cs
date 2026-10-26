@@ -45,6 +45,17 @@ public sealed class ServerProfile : INotifyPropertyChanged
     [JsonIgnore]
     public int Port => GetPort();
 
+    /// <summary>
+    /// True when the server starts from a Java argument file (Forge/NeoForge: Jar is
+    /// "@libraries/.../win_args.txt") rather than with -jar.
+    /// </summary>
+    [JsonIgnore]
+    public bool UsesArgsFile => Jar.StartsWith('@');
+
+    /// <summary>The file that has to exist to start the server: the JAR or the argument file.</summary>
+    [JsonIgnore]
+    public string LaunchFilePath => Path.Combine(Folder, Jar.TrimStart('@'));
+
     public string DisplayName => $"{Name}{Environment.NewLine}{Type} • {Version} • Port {GetPort()}";
 
     public event PropertyChangedEventHandler? PropertyChanged;

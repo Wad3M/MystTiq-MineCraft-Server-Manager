@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace ASimpleMinecraftServer.Core;
 
 /// <summary>
-/// Manages a server's add-on JARs: plugins/ for Paper, Purpur and Folia, mods/ for Fabric.
+/// Manages a server's add-on JARs: plugins/ for Paper, Purpur and Folia, mods/ for Fabric, Forge and NeoForge.
 /// </summary>
 public sealed class PluginService
 {
@@ -125,18 +125,37 @@ public sealed class PluginService
     {
         var kind = AddonKinds.For(profile);
         if (kind == AddonKind.None)
-            throw new InvalidOperationException($"{profile.Type} servers don't support plugins or mods. Use a Paper, Purpur, Folia, or Fabric server.");
+            throw new InvalidOperationException($"{profile.Type} servers don't support plugins or mods. Use a Paper, Purpur, Folia, Fabric, Forge or NeoForge server.");
         if (kind == AddonKind.Plugin && candidate.Kind != AddonKind.Plugin)
             throw new InvalidDataException(candidate.Kind == AddonKind.Mod
-                ? $"The {what} is a Fabric mod. This server runs {profile.Type}, which uses plugins."
+                ? $"The {what} is a {LoaderName(candidate.ModLoader)} mod. This server runs {profile.Type}, which uses plugins."
                 : $"The {what} does not contain plugin.yml or paper-plugin.yml.");
         if (kind == AddonKind.Mod && candidate.Kind != AddonKind.Mod)
             throw new InvalidDataException(candidate.Kind == AddonKind.Plugin
-                ? $"The {what} is a plugin. This server runs Fabric, which uses mods."
-                : $"The {what} does not contain fabric.mod.json, so it is not a Fabric mod.");
+                ? $"The {what} is a plugin. This server runs {profile.Type}, which uses mods."
+                : $"The {what} isn't a {profile.Type} mod (it has no mod descriptor).");
+        if (kind == AddonKind.Mod && !LoaderFits(profile.Type, candidate.ModLoader))
+            throw new InvalidDataException($"The {what} is a {LoaderName(candidate.ModLoader)} mod, but this server runs {profile.Type}. Get the {profile.Type} version of the mod.");
         if (candidate.IsClientOnly)
             throw new InvalidDataException($"{candidate.Name} is a client-only mod. It goes in players' game folders, not on the server.");
     }
+
+    /// <summary>Whether a mod made for <paramref name="modLoader"/> runs on this server type. Older NeoForge still reads Forge's mods.toml.</summary>
+    public static bool LoaderFits(string serverType, string modLoader) => serverType.ToLowerInvariant() switch
+    {
+        "fabric" => modLoader == "fabric",
+        "forge" => modLoader == "forge",
+        "neoforge" => modLoader is "neoforge" or "forge",
+        _ => false
+    };
+
+    private static string LoaderName(string modLoader) => modLoader switch
+    {
+        "fabric" => "Fabric",
+        "forge" => "Forge",
+        "neoforge" => "NeoForge",
+        _ => "mod-loader"
+    };
 
     private static PluginRecord ReadRecord(string path)
     {
@@ -164,6 +183,7 @@ public sealed class PluginService
             HasDescriptor = result.HasDescriptor,
             IsReadableJar = result.IsReadable,
             Kind = result.Kind,
+            ModLoader = metadata.TryGetValue("loader", out var loader) ? loader : string.Empty,
             IsClientOnly = metadata.TryGetValue("environment", out var environment) && environment.Equals("client", StringComparison.OrdinalIgnoreCase)
         };
     }
@@ -182,6 +202,10 @@ public sealed class PluginService
             using var archive = ZipFile.OpenRead(path);
             var fabric = archive.GetEntry("fabric.mod.json");
             if (fabric is not null) return ReadFabricMetadata(fabric, values);
+            var neoforge = archive.GetEntry("META-INF/neoforge.mods.toml");
+            if (neoforge is not null) return ReadModsToml(neoforge, values, "neoforge");
+            var forge = archive.GetEntry("META-INF/mods.toml");
+            if (forge is not null) return ReadModsToml(forge, values, "forge");
             var entry = archive.Entries.FirstOrDefault(item =>
                 item.FullName.Equals("plugin.yml", StringComparison.OrdinalIgnoreCase) ||
                 item.FullName.Equals("paper-plugin.yml", StringComparison.OrdinalIgnoreCase));
@@ -213,6 +237,36 @@ public sealed class PluginService
         catch (IOException) { return new(values, false, false, AddonKind.None); }
     }
 
+    /// <summary>Reads the first mod's displayName/modId/version from Forge or NeoForge's mods.toml.</summary>
+    private static MetadataResult ReadModsToml(ZipArchiveEntry entry, Dictionary<string, string> values, string loader)
+    {
+        values["loader"] = loader;
+        using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
+        string? Value(string line, string key)
+        {
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith(key, StringComparison.Ordinal)) return null;
+            var rest = trimmed[key.Length..].TrimStart();
+            if (!rest.StartsWith('=')) return null;
+            var value = rest[1..].Trim();
+            var hash = value.IndexOf(" #", StringComparison.Ordinal);
+            if (hash >= 0) value = value[..hash].Trim();
+            return value.Trim('"', '\'');
+        }
+        var inMods = false;
+        while (reader.ReadLine() is { } line)
+        {
+            var trimmed = line.Trim();
+            // Only the first [[mods]] table counts; any later table ends it.
+            if (trimmed.StartsWith('[')) { if (inMods) break; inMods = trimmed == "[[mods]]"; continue; }
+            if (!inMods) continue;
+            if (Value(line, "displayName") is { Length: > 0 } name) values["name"] = name;
+            else if (Value(line, "modId") is { Length: > 0 } id && !values.ContainsKey("name")) values["name"] = id;
+            else if (Value(line, "version") is { Length: > 0 } version && !version.StartsWith("${", StringComparison.Ordinal)) values["version"] = version;
+        }
+        return new(values, true, true, AddonKind.Mod);
+    }
+
     private static MetadataResult ReadFabricMetadata(ZipArchiveEntry entry, Dictionary<string, string> values)
     {
         try
@@ -221,6 +275,7 @@ public sealed class PluginService
             using var json = JsonDocument.Parse(stream, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             var root = json.RootElement;
             string? Text(string name) => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+            values["loader"] = "fabric";
             if (Text("name") is { Length: > 0 } name) values["name"] = name;
             else if (Text("id") is { Length: > 0 } id) values["name"] = id;
             if (Text("version") is { Length: > 0 } version) values["version"] = version;

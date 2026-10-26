@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Xml.Linq;
 using System.Text.RegularExpressions;
 
 namespace ASimpleMinecraftServer.Services;
@@ -9,7 +10,10 @@ public sealed record ServerDownload(string Url, string? HashAlgorithm, string? H
 public sealed class VersionManager(DownloadService downloads)
 {
     public static readonly IReadOnlyList<string> SupportedServerTypes =
-        ["Vanilla", "Paper", "Purpur", "Folia", "Fabric", "Custom JAR"];
+        ["Vanilla", "Paper", "Purpur", "Folia", "Fabric", "Forge", "NeoForge", "Custom JAR"];
+
+    private const string ForgeMaven = "https://maven.minecraftforge.net/net/minecraftforge/forge";
+    private const string NeoForgeMaven = "https://maven.neoforged.net/releases/net/neoforged/neoforge";
 
     public async Task<IReadOnlyList<string>> GetVersionsAsync(string serverType, CancellationToken cancellationToken = default)
     {
@@ -19,6 +23,8 @@ public sealed class VersionManager(DownloadService downloads)
             "Folia" => await GetPaperMcVersionsAsync("folia", cancellationToken),
             "Purpur" => await GetPurpurVersionsAsync(cancellationToken),
             "Fabric" => await GetFabricVersionsAsync(cancellationToken),
+            "Forge" => (await GetMavenVersionsAsync(ForgeMaven, cancellationToken)).Select(ForgeMinecraftVersion).OfType<string>(),
+            "NeoForge" => (await GetMavenVersionsAsync(NeoForgeMaven, cancellationToken)).Select(NeoForgeMinecraftVersion).OfType<string>(),
             "Custom JAR" => [],
             _ => await GetVanillaVersionsAsync(cancellationToken)
         };
@@ -40,9 +46,85 @@ public sealed class VersionManager(DownloadService downloads)
             "Purpur" => await ResolvePurpurAsync(version, cancellationToken),
             // Fabric's meta API publishes no checksum for the server launcher; HTTPS is the only protection.
             "Fabric" => new ServerDownload(await ResolveFabricAsync(version, loaderVersion, cancellationToken), null, null),
+            "Forge" => await ResolveForgeAsync(version, loaderVersion, cancellationToken),
+            "NeoForge" => await ResolveNeoForgeAsync(version, loaderVersion, cancellationToken),
             _ => throw new InvalidOperationException($"No automatic download provider exists for {serverType}.")
         };
     }
+
+    /// <summary>The Minecraft version of a Forge Maven version ("1.20.1-47.3.0" → "1.20.1"), or null for odd old entries.</summary>
+    public static string? ForgeMinecraftVersion(string forgeVersion)
+    {
+        var dash = forgeVersion.IndexOf('-');
+        if (dash <= 0) return null;
+        var mc = forgeVersion[..dash];
+        // Installers older than Minecraft 1.7 don't support --installServer.
+        var match = Regex.Match(mc, @"^1\.(\d+)(\.\d+)?$");
+        return match.Success && int.Parse(match.Groups[1].Value) >= 7 ? mc : null;
+    }
+
+    /// <summary>
+    /// The Minecraft version a NeoForge version targets. Older NeoForge numbers drop the leading "1."
+    /// ("21.1.72" → 1.21.1, "21.0.10" → 1.21); year-based ones start with it ("26.1.0.5" → 26.1, "26.1.1.2" → 26.1.1).
+    /// </summary>
+    public static string? NeoForgeMinecraftVersion(string neoForgeVersion)
+    {
+        var parts = neoForgeVersion.Split('-')[0].Split('.');
+        if (parts.Length < 3 || parts.Any(p => !int.TryParse(p, out _))) return null;
+        if (parts.Length >= 4) return parts[2] == "0" ? $"{parts[0]}.{parts[1]}" : $"{parts[0]}.{parts[1]}.{parts[2]}";
+        // Three-part numbers 20.x–25.x; anything else (e.g. the 47.x builds of the old net.neoforged:forge) isn't this scheme.
+        if (int.Parse(parts[0]) is < 20 or > 25) return null;
+        return parts[1] == "0" ? $"1.{parts[0]}" : $"1.{parts[0]}.{parts[1]}";
+    }
+
+    /// <summary>The newest loader version for a Minecraft version, preferring non-beta releases.</summary>
+    public static string? PickLoaderVersion(IEnumerable<string> loaderVersions, string minecraftVersion, Func<string, string?> minecraftOf)
+    {
+        var matching = loaderVersions.Where(v => minecraftOf(v) == minecraftVersion).ToList();
+        static bool IsBeta(string v) => Regex.IsMatch(v, "(alpha|beta|pre|rc)", RegexOptions.IgnoreCase);
+        return matching.Where(v => !IsBeta(v)).OrderByDescending(LoaderKey).FirstOrDefault()
+               ?? matching.OrderByDescending(LoaderKey).FirstOrDefault();
+    }
+
+    private async Task<IReadOnlyList<string>> GetMavenVersionsAsync(string artifactUrl, CancellationToken token)
+    {
+        var xml = XDocument.Parse(await downloads.GetStringAsync($"{artifactUrl}/maven-metadata.xml", token));
+        return xml.Descendants("version").Select(element => element.Value.Trim()).Where(v => v.Length > 0).ToList();
+    }
+
+    private async Task<ServerDownload> ResolveForgeAsync(string version, string? pinnedLoader, CancellationToken token)
+    {
+        string full;
+        if (!string.IsNullOrWhiteSpace(pinnedLoader))
+            full = pinnedLoader.StartsWith(version + "-", StringComparison.Ordinal) ? pinnedLoader : $"{version}-{pinnedLoader}";
+        else
+            full = PickLoaderVersion(await GetMavenVersionsAsync(ForgeMaven, token), version, ForgeMinecraftVersion)
+                   ?? throw new InvalidOperationException($"No Forge build is available for Minecraft {version}.");
+        var escaped = Uri.EscapeDataString(full);
+        return await WithMavenSha1Async($"{ForgeMaven}/{escaped}/forge-{escaped}-installer.jar", token);
+    }
+
+    private async Task<ServerDownload> ResolveNeoForgeAsync(string version, string? pinnedLoader, CancellationToken token)
+    {
+        var chosen = !string.IsNullOrWhiteSpace(pinnedLoader)
+            ? pinnedLoader
+            : PickLoaderVersion(await GetMavenVersionsAsync(NeoForgeMaven, token), version, NeoForgeMinecraftVersion)
+              ?? throw new InvalidOperationException($"No NeoForge build is available for Minecraft {version}.");
+        var escaped = Uri.EscapeDataString(chosen);
+        return await WithMavenSha1Async($"{NeoForgeMaven}/{escaped}/neoforge-{escaped}-installer.jar", token);
+    }
+
+    /// <summary>Maven publishes a .sha1 next to each file; the installer is checked against it.</summary>
+    private async Task<ServerDownload> WithMavenSha1Async(string url, CancellationToken token)
+    {
+        var sha1 = (await downloads.GetStringAsync(url + ".sha1", token)).Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (sha1 is null || !Regex.IsMatch(sha1, "^[0-9a-fA-F]{40}$"))
+            throw new InvalidOperationException("The installer's published SHA-1 checksum could not be read.");
+        return new ServerDownload(url, "SHA1", sha1);
+    }
+
+    private static string LoaderKey(string version) =>
+        string.Concat(Regex.Matches(version, @"\d+").Select(match => match.Value.PadLeft(8, '0')));
 
     private async Task<IReadOnlyList<string>> GetVanillaVersionsAsync(CancellationToken token)
     {

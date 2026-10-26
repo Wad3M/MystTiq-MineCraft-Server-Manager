@@ -17,7 +17,8 @@ public sealed record ServerInstallRequest(
     int MaxPlayers = 20,
     string Difficulty = "normal",
     bool OnlineMode = true,
-    string? LoaderVersion = null);
+    string? LoaderVersion = null,
+    string JavaPath = "java");
 
 public sealed class ServerInstaller
 {
@@ -35,6 +36,8 @@ public sealed class ServerInstaller
             ["Purpur"] = new PurpurInstaller(downloads, versions),
             ["Folia"] = new FoliaInstaller(downloads, versions),
             ["Fabric"] = new FabricInstaller(downloads, versions),
+            ["Forge"] = new ForgeInstaller(downloads, versions, "Forge"),
+            ["NeoForge"] = new ForgeInstaller(downloads, versions, "NeoForge"),
             ["Custom JAR"] = new CustomJarInstaller()
         };
     }
@@ -92,7 +95,8 @@ public sealed class ServerInstaller
             Type = request.Type,
             Version = request.Version,
             MemoryGb = Math.Max(1, request.MemoryGb),
-            Jar = "server.jar"
+            // Forge/NeoForge start from an argument file the installer wrote.
+            Jar = installer is ForgeInstaller ? ServerFolderInspector.FindForgeLaunchTarget(normalizedFolder) ?? "server.jar" : "server.jar"
         };
     }
 

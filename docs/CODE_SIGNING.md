@@ -27,7 +27,7 @@ It only connects to the internet when you use a feature that needs it:
 
 | When you… | It contacts | To |
 |---|---|---|
-| Open Create Server or install a server | Mojang (`piston-meta.mojang.com`), PaperMC (`fill.papermc.io`), PurpurMC (`api.purpurmc.org`), FabricMC (`meta.fabricmc.net`) | List Minecraft versions and download the server JAR you picked |
+| Open Create Server or install a server | Mojang (`piston-meta.mojang.com`), PaperMC (`fill.papermc.io`), PurpurMC (`api.purpurmc.org`), FabricMC (`meta.fabricmc.net`), Forge (`maven.minecraftforge.net`), NeoForge (`maven.neoforged.net`) | List Minecraft versions and download the server JAR or installer you picked. The Forge/NeoForge installer then downloads Minecraft and its libraries from Mojang and those Maven repositories |
 | Install a Modrinth modpack | The hosts the pack lists, limited to `cdn.modrinth.com`, `github.com`, `raw.githubusercontent.com` and `gitlab.com` | Download the pack's server files |
 | Search or install add-ons, or install a plugin pack | Modrinth (`api.modrinth.com`, `cdn.modrinth.com`) | Search for and download plugins or mods |
 | Add a player to the whitelist or operators while the server is stopped (online mode) | Mojang (`api.mojang.com`) | Look up the player's UUID from their name |

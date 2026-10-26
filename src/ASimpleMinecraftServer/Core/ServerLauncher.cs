@@ -53,8 +53,7 @@ public sealed class ServerLauncher : IDisposable
         if (string.IsNullOrWhiteSpace(profile.Folder) || !Directory.Exists(profile.Folder))
             throw new DirectoryNotFoundException("The selected server folder does not exist.");
 
-        var jarPath = Path.Combine(profile.Folder, profile.Jar);
-        if (!File.Exists(jarPath)) throw new FileNotFoundException("The configured server JAR could not be found.", jarPath);
+        if (!File.Exists(profile.LaunchFilePath)) throw new FileNotFoundException("The configured server JAR could not be found.", profile.LaunchFilePath);
 
         var startInfo = new ProcessStartInfo
         {
@@ -66,10 +65,19 @@ public sealed class ServerLauncher : IDisposable
             RedirectStandardInput = true,
             CreateNoWindow = true
         };
+        // Forge/NeoForge keep the user's JVM options in user_jvm_args.txt; ours come after so the memory setting wins.
+        if (profile.UsesArgsFile && File.Exists(Path.Combine(profile.Folder, "user_jvm_args.txt"))) startInfo.ArgumentList.Add("@user_jvm_args.txt");
         startInfo.ArgumentList.Add("-Xms1G");
         startInfo.ArgumentList.Add($"-Xmx{Math.Max(1, profile.MemoryGb)}G");
-        startInfo.ArgumentList.Add("-jar");
-        startInfo.ArgumentList.Add(profile.Jar);
+        if (profile.UsesArgsFile)
+        {
+            startInfo.ArgumentList.Add(profile.Jar); // "@libraries/.../win_args.txt"
+        }
+        else
+        {
+            startInfo.ArgumentList.Add("-jar");
+            startInfo.ArgumentList.Add(profile.Jar);
+        }
         startInfo.ArgumentList.Add("nogui");
 
         _stopRequested = false;

@@ -161,7 +161,8 @@ public sealed class NativeBackendController : IDisposable
             customJarPath,
             eulaAccepted,
             port,
-            LoaderVersion: loaderVersion);
+            LoaderVersion: loaderVersion,
+            JavaPath: string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim());
 
         var profile = await _serverInstaller.InstallAsync(request, cancellationToken);
         profile.JavaPath = string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim();
@@ -185,8 +186,8 @@ public sealed class NativeBackendController : IDisposable
         var plan = ModpackReader.Read(mrpackPath);
         var serverType = plan.Loader switch
         {
-            "Fabric" or "Vanilla" => plan.Loader,
-            _ => throw new NotSupportedException($"{plan.Name} uses {plan.Loader}, which MystTiq can't install yet. Fabric modpacks are supported.")
+            "Fabric" or "Vanilla" or "Forge" or "NeoForge" => plan.Loader,
+            _ => throw new NotSupportedException($"{plan.Name} uses {plan.Loader}, which MystTiq can't install yet. Fabric, Forge and NeoForge modpacks are supported.")
         };
 
         progress?.Report($"Installing {serverType} for Minecraft {plan.MinecraftVersion}…");
@@ -249,7 +250,7 @@ public sealed class NativeBackendController : IDisposable
         var existing = Servers.FirstOrDefault(s => PathsEqual(s.Folder, folder));
         if (existing is not null) { SelectServer(existing); return existing; }
 
-        var jar = ServerFolderInspector.FindServerJar(folder);
+        var jar = ServerFolderInspector.FindForgeLaunchTarget(folder) ?? ServerFolderInspector.FindServerJar(folder);
         var profile = new ServerProfile
         {
             Name = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
@@ -507,7 +508,7 @@ public sealed class NativeBackendController : IDisposable
     public Task<IReadOnlyList<PluginCatalogItem>> SearchAddonsAsync(string query, CancellationToken cancellationToken = default)
     {
         var (profile, kind) = RequireAddonServer();
-        return _pluginCatalog.SearchAsync(query, profile.Version, kind, cancellationToken);
+        return _pluginCatalog.SearchAsync(query, profile.Version, profile.Type, cancellationToken);
     }
 
     /// <summary>
@@ -517,7 +518,7 @@ public sealed class NativeBackendController : IDisposable
     public async Task<PluginRecord> InstallAddonAsync(PluginCatalogItem item, CancellationToken cancellationToken = default)
     {
         var (profile, kind) = RequireAddonServer();
-        await _pluginCatalog.ResolveInstallAsync(item, profile.Version, kind, cancellationToken);
+        await _pluginCatalog.ResolveInstallAsync(item, profile.Version, profile.Type, cancellationToken);
         if (!item.CanInstall || string.IsNullOrWhiteSpace(item.FileName))
             throw new InvalidOperationException($"{item.Name} has no {profile.Type} build for Minecraft {profile.Version}.");
         var temp = Path.Combine(Path.GetTempPath(), "MystTiq-" + Guid.NewGuid().ToString("N") + ".jar");
@@ -545,7 +546,7 @@ public sealed class NativeBackendController : IDisposable
         var profile = RequireSelected();
         var kind = AddonKinds.For(profile);
         if (kind == AddonKind.None)
-            throw new InvalidOperationException($"{profile.Type} servers don't support plugins or mods. Create a Paper, Purpur, Folia, or Fabric server to use add-ons.");
+            throw new InvalidOperationException($"{profile.Type} servers don't support plugins or mods. Create a Paper, Purpur, Folia, Fabric, Forge or NeoForge server to use add-ons.");
         if (string.IsNullOrWhiteSpace(profile.Version) || profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Set this server's Minecraft version in Settings first, so MystTiq can pick compatible add-ons.");
         return (profile, kind);
@@ -616,11 +617,11 @@ public sealed class NativeBackendController : IDisposable
     /// </summary>
     public async Task<IReadOnlyList<string>> InstallCrossplayAsync(CancellationToken cancellationToken = default)
     {
-        var (profile, kind) = RequireAddonServer();
-        if (profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Geyser doesn't support Folia servers. Use Paper, Purpur or Fabric for crossplay.");
+        var (profile, _) = RequireAddonServer();
+        if (profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase) || profile.Type.Equals("Forge", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Geyser doesn't support {profile.Type} servers. Use Paper, Purpur, Fabric or NeoForge for crossplay.");
         var installed = new List<string>();
-        if (kind == AddonKind.Mod && !Plugins.List(profile).Any(p => p.FileName.StartsWith("fabric-api", StringComparison.OrdinalIgnoreCase)))
+        if (profile.Type.Equals("Fabric", StringComparison.OrdinalIgnoreCase) && !Plugins.List(profile).Any(p => p.FileName.StartsWith("fabric-api", StringComparison.OrdinalIgnoreCase)))
             installed.Add((await InstallAddonByIdAsync("fabric-api", cancellationToken)).Name);
         installed.Add((await InstallAddonByIdAsync("geyser", cancellationToken)).Name);
         installed.Add((await InstallAddonByIdAsync("floodgate", cancellationToken)).Name);
@@ -850,8 +851,7 @@ public sealed class NativeBackendController : IDisposable
     private static void ValidateStart(ServerProfile profile)
     {
         if (!Directory.Exists(profile.Folder)) throw new DirectoryNotFoundException("The server folder does not exist.");
-        var jar = Path.Combine(profile.Folder, profile.Jar);
-        if (!File.Exists(jar)) throw new FileNotFoundException("The configured server JAR was not found.", jar);
+        if (!File.Exists(profile.LaunchFilePath)) throw new FileNotFoundException("The configured server JAR was not found.", profile.LaunchFilePath);
         if (!string.Equals(profile.JavaPath, "java", StringComparison.OrdinalIgnoreCase) && !File.Exists(profile.JavaPath))
             throw new FileNotFoundException("The configured Java executable was not found.", profile.JavaPath);
     }

@@ -4,19 +4,19 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.10.0, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.11.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
-- **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, or Fabric (checked against the provider's published checksum), or uses your own JAR. It picks a free port and writes a starting `server.properties` for you.
+- **One-click server setup.** Downloads Vanilla, Paper, Purpur, Folia, Fabric, Forge, or NeoForge (checked against the provider's published checksum), or uses your own JAR. It picks a free port and writes a starting `server.properties` for you.
 - **Run several servers at once.** Each server has its own folder, version, memory limit, Java path, console, and player list. The dashboard shows them all with Start/Stop buttons.
 - **Port conflict check.** A server won't start if its port is already taken.
 - **How to connect.** The dashboard shows the address to join from this PC, your home network, the internet, and private networks like Tailscale, ZeroTier, Hamachi or Radmin VPN, with Copy buttons and playit.gg guidance if you can't port forward.
 - **Start, stop, restart, and a live console.** Graceful stop, with a warning before any force kill.
 - **Backups.** Manual or scheduled, with a retention limit and automatic safety backups before updates.
-- **Add-ons: plugins and mods.** Paper, Purpur, and Folia servers get plugins; Fabric servers get mods. Search Modrinth in the app (only compatible, server-side results), install with one click (SHA-512 verified), or add a JAR from a file.
+- **Add-ons: plugins and mods.** Paper, Purpur, and Folia servers get plugins; Fabric, Forge, and NeoForge servers get mods. Search Modrinth in the app (only compatible, server-side results), install with one click (SHA-512 verified), or add a JAR from a file.
 - **Bedrock crossplay.** One click installs Geyser and Floodgate so phone, console and Windows Bedrock players can join, each server with its own Bedrock port.
-- **Modpacks.** Create a server from a Modrinth `.mrpack` file: the right Minecraft and Fabric versions, every server-side mod (hash checked), and the pack's config.
+- **Modpacks.** Create a server from a Modrinth `.mrpack` file: the right Minecraft and loader versions (Fabric, Forge, or NeoForge), every server-side mod (hash checked), and the pack's config.
 - **Datapacks.** Install, enable, disable, or remove them.
 - **Worlds and players.** Import, rename, and archive worlds. Kick or ban players, and manage the whitelist and operators (running or stopped).
 - **Crash auto-restart.** A crashed server restarts itself, with a limit so a broken server can't loop forever.
@@ -97,9 +97,7 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 ## Roadmap
 
-| Version | Planned |
-|---|---|
-| 0.11.0 | Forge and NeoForge server types |
+Nothing is scheduled right now. Ideas and requests are welcome in [Issues](https://github.com/Wad3M/MystTiq-MineCraft-Server-Manager/issues).
 
 ## Code signing and privacy
 
@@ -111,4 +109,4 @@ Windows releases are being set up for free code signing through [SignPath Founda
 
 ## Release notes
 
-The latest is [v0.10.0](docs/releases/RELEASE_NOTES_v0.10.0.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.11.0](docs/releases/RELEASE_NOTES_v0.11.0.md). See [`docs/releases/`](docs/releases/) for all versions.

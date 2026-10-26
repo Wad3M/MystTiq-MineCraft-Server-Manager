@@ -31,6 +31,8 @@ public sealed class PluginRecord : INotifyPropertyChanged
     public bool IsReadableJar { get; init; } = true;
     public bool IsDuplicate { get; set; }
     public AddonKind Kind { get; init; }
+    /// <summary>fabric, forge or neoforge for mods; empty for plugins.</summary>
+    public string ModLoader { get; init; } = string.Empty;
     public bool IsClientOnly { get; init; }
     public string HealthText => !IsReadableJar ? "Malformed JAR" : !HasDescriptor ? "No descriptor" : IsClientOnly ? "Client-only mod" : IsDuplicate ? "Duplicate name" : "Ready";
     public string StatusText => IsEnabled ? "Enabled" : "Disabled";

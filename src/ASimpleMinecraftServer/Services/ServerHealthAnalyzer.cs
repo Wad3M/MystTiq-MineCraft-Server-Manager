@@ -16,10 +16,14 @@ public sealed class ServerHealthAnalyzer
         var folderExists = !string.IsNullOrWhiteSpace(profile.Folder) && Directory.Exists(profile.Folder);
         Add("Installation", "Server folder", folderExists, profile.Folder ?? "Server folder configured.", "The configured server folder does not exist.", 12);
 
-        var jarPath = Path.Combine(profile.Folder ?? string.Empty, profile.Jar ?? string.Empty);
+        var jarPath = profile.LaunchFilePath;
         var jarExists = folderExists && File.Exists(jarPath);
         Add("Installation", "Server JAR", jarExists, profile.Jar ?? "Server JAR configured.", "The configured server JAR is missing.", 12);
-        if (jarExists)
+        if (jarExists && profile.UsesArgsFile)
+        {
+            Add("Installation", "JAR integrity", true, "Starts from the loader's argument file.", string.Empty, 8);
+        }
+        else if (jarExists)
         {
             try { using var archive = ZipFile.OpenRead(jarPath); Add("Installation", "JAR integrity", archive.Entries.Count > 0, "The JAR archive can be opened.", "The JAR archive appears empty or damaged.", 8); }
             catch { Add("Installation", "JAR integrity", false, string.Empty, "The JAR archive could not be opened.", 8); }
