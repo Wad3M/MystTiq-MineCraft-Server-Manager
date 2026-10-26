@@ -777,10 +777,41 @@ public partial class PrototypeWindow : Window
                 installButton.IsEnabled = eula.IsChecked == true;
             }
         }, "GreenActionButton");
+        // Modpack install reuses this form (name, folder, memory, Java, port, EULA); the pack decides version and loader.
+        Button? modpackButton = null;
+        modpackButton = ActionButton("Install Modrinth Modpack (.mrpack)…", async (_, _) =>
+        {
+            if (_backend is null || modpackButton is null) return;
+            var pack = PickFile("Modrinth modpack (*.mrpack)|*.mrpack");
+            if (pack is null) return;
+            if (!int.TryParse(memory.Text, out var gb)) gb = 6;
+            if (!int.TryParse(port.Text, out var serverPort) || serverPort is < 1 or > 65535) { status.Text = "Enter a port between 1 and 65535."; return; }
+            if (eula.IsChecked != true) { status.Text = "Accept the Minecraft EULA to install a server."; return; }
+            try
+            {
+                modpackButton.IsEnabled = false; installButton!.IsEnabled = false;
+                var progress = new Progress<string>(message => status.Text = message);
+                var (profile, plan) = await _backend.InstallModpackAsync(pack, name.Text, folder.Text, gb, java.Text, serverPort, eulaAccepted: true, progress);
+                ServerPicker.SelectedItem = profile;
+                status.Text = $"Installed {plan.Name} {plan.PackVersion} ({plan.Loader} {plan.MinecraftVersion}).";
+                MessageBox.Show($"Modpack installed.\n\n{plan.Name} {plan.PackVersion}\n{plan.Loader} {plan.LoaderVersion} for Minecraft {plan.MinecraftVersion}\n{plan.ServerFiles.Count} server file(s); {plan.SkippedClientOnly} client-only file(s) skipped.\n\nPlayers need the same modpack installed in their game to join.", "MystTiq", MessageBoxButton.OK, MessageBoxImage.Information);
+                Navigate("Dashboard");
+            }
+            catch (Exception ex)
+            {
+                status.Text = $"Modpack install failed: {ex.Message}";
+                App.WriteStartupLog("Modpack installation failed", ex);
+                MessageBox.Show(ex.Message, "Modpack installation failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally { modpackButton.IsEnabled = eula.IsChecked == true; installButton!.IsEnabled = eula.IsChecked == true; }
+        });
+        modpackButton.ToolTip = "Uses the name, folder, memory, Java and port above. The modpack decides the Minecraft version and loader.";
         installButton.IsEnabled = false;
-        eula.Checked += (_, _) => installButton.IsEnabled = true;
-        eula.Unchecked += (_, _) => installButton.IsEnabled = false;
+        modpackButton.IsEnabled = false;
+        eula.Checked += (_, _) => { installButton.IsEnabled = true; modpackButton.IsEnabled = true; };
+        eula.Unchecked += (_, _) => { installButton.IsEnabled = false; modpackButton.IsEnabled = false; };
         actions.Children.Add(installButton);
+        actions.Children.Add(modpackButton);
         outer.Children.Add(actions);
 
         create.Child = outer;

@@ -16,7 +16,8 @@ public sealed record ServerInstallRequest(
     int Port = 25565,
     int MaxPlayers = 20,
     string Difficulty = "normal",
-    bool OnlineMode = true);
+    bool OnlineMode = true,
+    string? LoaderVersion = null);
 
 public sealed class ServerInstaller
 {

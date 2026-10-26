@@ -55,6 +55,7 @@ public sealed class DownloadService : IDisposable
         {
             actual = download.HashAlgorithm switch
             {
+                "SHA512" => await SHA512.HashDataAsync(stream, cancellationToken),
                 "SHA256" => await SHA256.HashDataAsync(stream, cancellationToken),
                 "SHA1" => await SHA1.HashDataAsync(stream, cancellationToken),
                 "MD5" => await MD5.HashDataAsync(stream, cancellationToken),
@@ -64,7 +65,7 @@ public sealed class DownloadService : IDisposable
         if (!Convert.ToHexString(actual).Equals(download.Hash, StringComparison.OrdinalIgnoreCase))
         {
             File.Delete(destination);
-            throw new InvalidDataException($"The downloaded server JAR failed its {download.HashAlgorithm} check and was deleted. Try again, and report it if it keeps happening.");
+            throw new InvalidDataException($"The download {Path.GetFileName(destination)} failed its {download.HashAlgorithm} check and was deleted. Try again, and report it if it keeps happening.");
         }
     }
 

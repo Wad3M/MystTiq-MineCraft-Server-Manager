@@ -137,7 +137,8 @@ public sealed class NativeBackendController : IDisposable
         int port,
         bool eulaAccepted,
         string? customJarPath = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? loaderVersion = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new InvalidOperationException("Enter a server name.");
         if (string.IsNullOrWhiteSpace(folder)) throw new InvalidOperationException("Choose an install folder.");
@@ -159,7 +160,8 @@ public sealed class NativeBackendController : IDisposable
             Math.Max(1, memoryGb),
             customJarPath,
             eulaAccepted,
-            port);
+            port,
+            LoaderVersion: loaderVersion);
 
         var profile = await _serverInstaller.InstallAsync(request, cancellationToken);
         profile.JavaPath = string.IsNullOrWhiteSpace(javaPath) ? "java" : javaPath.Trim();
@@ -169,6 +171,60 @@ public sealed class NativeBackendController : IDisposable
         SelectServer(profile);
         GetInstance(profile).AddConsole($"[Manager] Installed {profile.Type} {profile.Version} as '{profile.Name}' in {profile.Folder}.");
         return profile;
+    }
+
+    /// <summary>
+    /// Creates a server from a Modrinth modpack (.mrpack): installs the Minecraft version and
+    /// loader the pack names, downloads its server-side files (SHA-512 verified, Modrinth's allowed
+    /// hosts only), then applies its overrides and server-overrides.
+    /// </summary>
+    public async Task<(ServerProfile Profile, ModpackPlan Plan)> InstallModpackAsync(
+        string mrpackPath, string name, string folder, int memoryGb, string javaPath, int port, bool eulaAccepted,
+        IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    {
+        var plan = ModpackReader.Read(mrpackPath);
+        var serverType = plan.Loader switch
+        {
+            "Fabric" or "Vanilla" => plan.Loader,
+            _ => throw new NotSupportedException($"{plan.Name} uses {plan.Loader}, which MystTiq can't install yet. Fabric modpacks are supported.")
+        };
+
+        progress?.Report($"Installing {serverType} for Minecraft {plan.MinecraftVersion}…");
+        var profile = await InstallServerAsync(string.IsNullOrWhiteSpace(name) ? plan.Name : name, folder, serverType, plan.MinecraftVersion,
+            memoryGb, javaPath, port, eulaAccepted, cancellationToken: cancellationToken,
+            loaderVersion: string.IsNullOrWhiteSpace(plan.LoaderVersion) ? null : plan.LoaderVersion);
+
+        try
+        {
+            await DownloadModpackFilesAsync(mrpackPath, plan, profile, progress, cancellationToken);
+        }
+        catch
+        {
+            // The folder was empty (or new) before this install, so removing it only undoes our work.
+            RemoveServer(profile);
+            try { Directory.Delete(profile.Folder, recursive: true); } catch { }
+            throw;
+        }
+        return (profile, plan);
+    }
+
+    private async Task DownloadModpackFilesAsync(string mrpackPath, ModpackPlan plan, ServerProfile profile, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        var root = Path.GetFullPath(profile.Folder) + Path.DirectorySeparatorChar;
+        for (var i = 0; i < plan.ServerFiles.Count; i++)
+        {
+            var file = plan.ServerFiles[i];
+            progress?.Report($"Downloading {i + 1} of {plan.ServerFiles.Count}: {Path.GetFileName(file.Path)}");
+            var destination = Path.GetFullPath(Path.Combine(profile.Folder, file.Path));
+            if (!destination.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"The modpack contains an unsafe file path: {file.Path}");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            await _downloads.DownloadVerifiedAsync(new ServerDownload(file.Download.AbsoluteUri, "SHA512", file.Sha512), destination, cancellationToken);
+        }
+
+        progress?.Report("Applying the modpack's configuration…");
+        var overrides = ModpackReader.ApplyOverrides(mrpackPath, profile.Folder);
+        GetInstance(profile).AddConsole($"[Manager] Installed modpack {plan.Name} {plan.PackVersion}: {plan.ServerFiles.Count} server file(s), {overrides} override file(s); skipped {plan.SkippedClientOnly} client-only file(s).");
     }
 
     /// <summary>

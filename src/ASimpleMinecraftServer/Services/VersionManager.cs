@@ -30,7 +30,7 @@ public sealed class VersionManager(DownloadService downloads)
             .ToList();
     }
 
-    public async Task<ServerDownload> ResolveDownloadAsync(string serverType, string version, CancellationToken cancellationToken = default)
+    public async Task<ServerDownload> ResolveDownloadAsync(string serverType, string version, CancellationToken cancellationToken = default, string? loaderVersion = null)
     {
         return serverType switch
         {
@@ -39,7 +39,7 @@ public sealed class VersionManager(DownloadService downloads)
             "Folia" => await ResolvePaperMcAsync("folia", version, cancellationToken),
             "Purpur" => await ResolvePurpurAsync(version, cancellationToken),
             // Fabric's meta API publishes no checksum for the server launcher; HTTPS is the only protection.
-            "Fabric" => new ServerDownload(await ResolveFabricAsync(version, cancellationToken), null, null),
+            "Fabric" => new ServerDownload(await ResolveFabricAsync(version, loaderVersion, cancellationToken), null, null),
             _ => throw new InvalidOperationException($"No automatic download provider exists for {serverType}.")
         };
     }
@@ -121,13 +121,14 @@ public sealed class VersionManager(DownloadService downloads)
         return new ServerDownload(download.GetProperty("url").GetString()!, sha256 is null ? null : "SHA256", sha256);
     }
 
-    private async Task<string> ResolveFabricAsync(string version, CancellationToken token)
+    /// <summary>Fabric server launcher URL; uses <paramref name="pinnedLoader"/> when a modpack requires a specific loader.</summary>
+    private async Task<string> ResolveFabricAsync(string version, string? pinnedLoader, CancellationToken token)
     {
         using var loaderDoc = JsonDocument.Parse(await downloads.GetStringAsync($"https://meta.fabricmc.net/v2/versions/loader/{Uri.EscapeDataString(version)}", token));
         if (loaderDoc.RootElement.ValueKind != JsonValueKind.Array || loaderDoc.RootElement.GetArrayLength() == 0)
             throw new InvalidOperationException($"No Fabric loader is available for Minecraft {version}.");
 
-        var loaderVersion = loaderDoc.RootElement[0].GetProperty("loader").GetProperty("version").GetString();
+        var loaderVersion = pinnedLoader ?? loaderDoc.RootElement[0].GetProperty("loader").GetProperty("version").GetString();
         if (string.IsNullOrWhiteSpace(loaderVersion)) throw new InvalidOperationException("Fabric loader version could not be resolved.");
 
         using var installerDoc = JsonDocument.Parse(await downloads.GetStringAsync("https://meta.fabricmc.net/v2/versions/installer", token));

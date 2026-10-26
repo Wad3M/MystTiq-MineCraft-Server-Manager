@@ -8,7 +8,7 @@ public sealed class FabricInstaller(DownloadService downloads, VersionManager ve
 {
     public async Task InstallAsync(ServerInstallRequest request, CancellationToken cancellationToken = default)
     {
-        var download = await versions.ResolveDownloadAsync("Fabric", request.Version, cancellationToken);
+        var download = await versions.ResolveDownloadAsync("Fabric", request.Version, cancellationToken, request.LoaderVersion);
         await downloads.DownloadVerifiedAsync(download, Path.Combine(request.Folder, "server.jar"), cancellationToken);
     }
 }
