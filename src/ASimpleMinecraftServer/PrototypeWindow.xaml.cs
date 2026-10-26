@@ -42,7 +42,7 @@ public partial class PrototypeWindow : Window
     // Maps UI icon names to files in Assets/Icons (MystCraft icon pack, see docs/icons).
     private static readonly Dictionary<string, string> IconFiles = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["dashboard"]="dashboard", ["create"]="installer", ["console"]="console", ["worlds"]="worlds", ["world_card"]="worlds",
+        ["dashboard"]="dashboard", ["update"]="update", ["java"]="java", ["create"]="installer", ["console"]="console", ["worlds"]="worlds", ["world_card"]="worlds",
         ["players"]="players", ["players_nav"]="players", ["plugins_nav"]="plugins", ["plugin_card"]="plugins", ["manageplugins"]="plugins",
         ["installplugins"]="install_plugin", ["datapacks"]="datapacks", ["resourcepacks"]="resourcepacks", ["templates"]="workshop", ["pluginpacks"]="modpack",
         ["migration"]="portal", ["performance"]="performance", ["health"]="health", ["loganalyzer"]="search_logs", ["startup"]="boot",
@@ -574,7 +574,7 @@ public partial class PrototypeWindow : Window
             "Java needed", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (download == MessageBoxResult.Yes)
         {
-            try { return await RunWithProgressAsync($"Getting Java {needed}", progress => _backend.JavaRuntimes.EnsureAsync(needed, progress)); }
+            try { return await RunWithProgressAsync($"Getting Java {needed}", progress => _backend!.JavaRuntimes.EnsureAsync(needed, progress)); }
             catch (Exception ex) { ShowError("Java download failed", ex); return null; }
         }
         if (result.Installation is null) return null;
@@ -1349,8 +1349,70 @@ public partial class PrototypeWindow : Window
             try { _backend!.RemoveServer(profile); Navigate("Dashboard"); }
             catch (Exception ex) { ShowError("Could not remove the server", ex); }
         }, "DangerButton")); stack.Children.Add(buttons); card.Child = stack; root.Children.Add(card);
+        root.Children.Add(BuildSoftwareUpdateCard(profile));
         var config = new ConfigurationView(); config.ResetForSelection(profile); config.ConfigurationSaved += (_, _) => _backend!.SaveProfiles(); root.Children.Add(config);
         return root;
+    }
+
+    /// <summary>Settings card: update the server to the newest build, or to a newer Minecraft version.</summary>
+    private UIElement BuildSoftwareUpdateCard(ServerProfile profile)
+    {
+        var card = Card(); card.Padding = new Thickness(16); card.Margin = new Thickness(0, 12, 0, 0);
+        var stack = new StackPanel(); card.Child = stack;
+        stack.Children.Add(TitleRow("update", "Update Server Software"));
+        if (!VersionManager.SupportedServerTypes.Contains(profile.Type) || profile.Type == "Custom JAR")
+        {
+            stack.Children.Add(Muted($"MystTiq can update Vanilla, Paper, Purpur, Folia, Fabric, Forge and NeoForge servers. This one is set to {profile.Type}; if that's wrong, fix the server type above."));
+            return card;
+        }
+        stack.Children.Add(Muted($"Currently {profile.Type} {profile.Version}. Pick the same version to get its newest build, or a newer Minecraft version. A full backup is made first, and going back to an older version isn't offered because worlds can't be downgraded."));
+        var versions = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 8, 8, 0), IsEnabled = false };
+        var status = Muted("Loading versions…");
+        var row = new WrapPanel();
+        row.Children.Add(versions);
+        Button? update = null;
+        update = ActionButton("Update…", async (_, _) =>
+        {
+            if (_backend is null || versions.SelectedItem is not string target) return;
+            if (_backend.IsServerRunning(profile)) { MessageBox.Show(this, $"Stop {profile.Name} first.", "Update", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            try
+            {
+                var message = $"Update {profile.Name} to the newest {profile.Type} build for Minecraft {target}?\n\nA full backup is made first.";
+                if (!string.Equals(target, profile.Version, StringComparison.OrdinalIgnoreCase))
+                {
+                    var problems = await RunWithProgressAsync("Checking add-ons", _ => _backend!.FindAddonsWithoutVersionAsync(profile, target));
+                    if (problems.Count > 0)
+                        message += $"\n\nThese add-ons may not work on {target}:\n• " + string.Join("\n• ", problems) + "\n\nThey'll stay installed; a server can fail to start until they're updated or removed.";
+                    message += "\n\nPlayers will need Minecraft " + target + " to join.";
+                }
+                if (MessageBox.Show(this, message, "Update server software", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+                if (profile.Type is "Forge" or "NeoForge" && await ResolveJavaAsync(profile.JavaPath, target) is { } java) _backend.SetJavaPath(profile, java);
+                var backup = await RunWithProgressAsync($"Updating {profile.Name}", progress => _backend!.UpdateServerSoftwareAsync(profile, target, progress));
+                MessageBox.Show(this, $"{profile.Name} now runs {profile.Type} {profile.Version}.\n\nThe backup made first is {backup.Name}; restore it from Backups if anything goes wrong.", "Update finished", MessageBoxButton.OK, MessageBoxImage.Information);
+                Navigate("Settings");
+            }
+            catch (Exception ex) { ShowError("Update failed", ex); }
+        }, "GreenActionButton");
+        update.IsEnabled = false;
+        update.VerticalAlignment = VerticalAlignment.Bottom;
+        row.Children.Add(update);
+        stack.Children.Add(row);
+        stack.Children.Add(status);
+        card.Loaded += async (_, _) =>
+        {
+            if (versions.Items.Count > 0 || _backend is null) return;
+            try
+            {
+                var available = (await _backend.GetAvailableVersionsAsync(profile.Type))
+                    .Where(v => !ServerInstaller.IsDowngrade(profile.Version, v)).ToList();
+                versions.ItemsSource = available;
+                versions.SelectedItem = available.FirstOrDefault(v => v.Equals(profile.Version, StringComparison.OrdinalIgnoreCase)) ?? available.FirstOrDefault();
+                versions.IsEnabled = update.IsEnabled = available.Count > 0;
+                status.Text = available.Count > 0 ? string.Empty : "No versions found.";
+            }
+            catch (Exception ex) { status.Text = $"Couldn't load versions: {ex.Message}"; }
+        };
+        return card;
     }
 
     private UIElement BuildHelpPage()

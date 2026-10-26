@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.12.0** (current) | [Automatic Java download](RELEASE_NOTES_v0.12.0.md) |
+| **0.13.0** (current) | [Update server software](RELEASE_NOTES_v0.13.0.md) |
+| 0.12.0 | [Automatic Java download](RELEASE_NOTES_v0.12.0.md) |
 | 0.11.0 | [Forge and NeoForge server types](RELEASE_NOTES_v0.11.0.md) |
 | 0.10.0 | [Whitelist and operators editor](RELEASE_NOTES_v0.10.0.md) |
 | 0.9.0 | [Bedrock crossplay with Geyser and Floodgate](RELEASE_NOTES_v0.9.0.md) |

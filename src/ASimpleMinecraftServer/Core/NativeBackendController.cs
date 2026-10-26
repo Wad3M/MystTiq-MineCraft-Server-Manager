@@ -505,6 +505,51 @@ public sealed class NativeBackendController : IDisposable
         return safety;
     }
 
+    /// <summary>
+    /// Add-ons that have no release for <paramref name="minecraftVersion"/> on Modrinth (or couldn't
+    /// be found there), so they may not load after a Minecraft update.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> FindAddonsWithoutVersionAsync(ServerProfile profile, string minecraftVersion, CancellationToken cancellationToken = default)
+    {
+        if (AddonKinds.For(profile) == AddonKind.None) return [];
+        var problems = new List<string>();
+        foreach (var addon in Plugins.List(profile).Where(p => p.IsEnabled))
+        {
+            try
+            {
+                await _pluginCatalog.ResolveInstalledUpdateAsync(addon, minecraftVersion, profile.Type, cancellationToken);
+                if (addon.UpdateStatus == "No compatible release") problems.Add($"{addon.Name}: no {minecraftVersion} version yet");
+                else if (addon.UpdateStatus == "Not found on Modrinth") problems.Add($"{addon.Name}: not on Modrinth, check it yourself");
+            }
+            catch (System.Net.Http.HttpRequestException) { problems.Add($"{addon.Name}: couldn't be checked"); }
+        }
+        return problems;
+    }
+
+    /// <summary>
+    /// Updates a stopped server to the newest build of <paramref name="minecraftVersion"/> (same or
+    /// newer than now). A full backup is made first; returns that backup.
+    /// </summary>
+    public async Task<BackupRecord> UpdateServerSoftwareAsync(ServerProfile profile, string minecraftVersion, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    {
+        if (GetInstance(profile).IsRunning) throw new InvalidOperationException($"Stop {profile.Name} before updating it.");
+        if (string.IsNullOrWhiteSpace(minecraftVersion)) throw new InvalidOperationException("Choose a Minecraft version.");
+        if (ServerInstaller.IsDowngrade(profile.Version, minecraftVersion))
+            throw new InvalidOperationException($"{profile.Name} runs Minecraft {profile.Version}. Going back to {minecraftVersion} isn't supported: worlds can't be opened by older versions.");
+
+        progress?.Report("Backing up the server first…");
+        var safety = await Backups.CreateAsync(profile, "Safety-BeforeUpdate", cancellationToken: cancellationToken);
+        progress?.Report($"Downloading {profile.Type} for Minecraft {minecraftVersion}…");
+        var oldVersion = profile.Version;
+        profile.Jar = await _serverInstaller.UpdateAsync(profile, minecraftVersion.Trim(), cancellationToken);
+        profile.Version = minecraftVersion.Trim();
+        profile.RefreshDerivedProperties();
+        SaveProfiles();
+        GetInstance(profile).AddConsole($"[Manager] Updated {profile.Type} from {oldVersion} to the newest {profile.Version} build. Backup made first: {safety.Name}.");
+        StateChanged?.Invoke(this, EventArgs.Empty);
+        return safety;
+    }
+
     public IReadOnlyList<string> ConsoleSnapshot() => Selected?.ConsoleSnapshot() ?? [];
 
     public bool TryGetPerformanceSnapshot(out TimeSpan cpuTime, out long memoryBytes)

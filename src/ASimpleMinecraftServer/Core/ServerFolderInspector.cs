@@ -41,7 +41,9 @@ public static partial class ServerFolderInspector
             var args = Directory.EnumerateDirectories(root)
                 .Select(dir => Path.Combine(dir, "win_args.txt"))
                 .Where(File.Exists)
-                .OrderByDescending(path => Path.GetFileName(Path.GetDirectoryName(path)), StringComparer.OrdinalIgnoreCase)
+                // The newest install wins (after an update the old version's files are still there).
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ThenByDescending(path => Path.GetFileName(Path.GetDirectoryName(path)), StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
             if (args is not null) return "@" + Path.GetRelativePath(folder, args).Replace('\\', '/');
         }

@@ -97,7 +97,8 @@ public sealed class ModrinthPluginCatalogService : IDisposable
     }
 
 
-    public async Task ResolveInstalledUpdateAsync(PluginRecord plugin, string minecraftVersion, CancellationToken cancellationToken)
+    /// <summary>Finds the installed add-on on Modrinth and the newest release for this loader and Minecraft version.</summary>
+    public async Task ResolveInstalledUpdateAsync(PluginRecord plugin, string minecraftVersion, string serverType, CancellationToken cancellationToken)
     {
         plugin.LatestVersion = "—";
         plugin.UpdateStatus = "Checking...";
@@ -106,9 +107,11 @@ public sealed class ModrinthPluginCatalogService : IDisposable
         plugin.UpdateFileName = null;
         plugin.UpdateSha512 = null;
 
+        var kind = AddonKinds.For(new ServerProfile { Type = serverType });
         var facets = JsonSerializer.Serialize(new[]
         {
-            new[] { "project_type:plugin" },
+            new[] { kind == AddonKind.Mod ? "project_type:mod" : "project_type:plugin" },
+            AddonKinds.ModrinthLoaders(serverType).Select(loader => $"categories:{loader}").ToArray(),
             new[] { $"versions:{minecraftVersion}" },
             new[] { "server_side:required", "server_side:optional" }
         });
@@ -135,7 +138,7 @@ public sealed class ModrinthPluginCatalogService : IDisposable
             Description = hit.Description,
             Downloads = hit.Downloads
         };
-        await ResolveInstallAsync(item, minecraftVersion, cancellationToken);
+        await ResolveInstallAsync(item, minecraftVersion, serverType, cancellationToken);
         if (!item.CanInstall)
         {
             plugin.UpdateStatus = "No compatible release";
