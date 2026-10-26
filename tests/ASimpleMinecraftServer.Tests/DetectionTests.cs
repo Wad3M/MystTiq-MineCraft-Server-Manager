@@ -174,3 +174,18 @@ public class CrashRestartPolicyTests
         Assert.True(policy.TryRegisterRestart(T0.AddSeconds(1), 1, TimeSpan.FromHours(1), out _));
     }
 }
+
+public class OverlayNetworkTests
+{
+    [Theory]
+    [InlineData("Tailscale Tunnel", "100.101.102.103", "Tailscale")]
+    [InlineData("Wintun Userspace Tunnel", "100.64.0.1", "Tailscale")]   // recognised by its address range
+    [InlineData("ZeroTier Virtual Port", "10.147.17.5", "ZeroTier")]
+    [InlineData("LogMeIn Hamachi Virtual Ethernet Adapter", "25.1.2.3", "Hamachi")]
+    [InlineData("Famatech Radmin VPN Ethernet Adapter", "26.10.20.30", "Radmin VPN")]
+    [InlineData("Intel(R) Wi-Fi 6 AX201", "192.168.1.20", null)]
+    [InlineData("Realtek PCIe GbE Family Controller", "100.63.255.255", null)]   // just below the Tailscale range
+    [InlineData("Realtek PCIe GbE Family Controller", "100.128.0.1", null)]      // just above it
+    public void Classifies_overlay_networks(string description, string address, string? expected) =>
+        Assert.Equal(expected, NetworkAddressService.ClassifyOverlay(description, address));
+}

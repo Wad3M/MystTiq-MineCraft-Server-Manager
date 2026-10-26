@@ -60,6 +60,7 @@ public partial class PrototypeWindow : Window
     private bool _sidebarCollapsed;
     // The dashboard rebuilds every second, so connection details live here between rebuilds.
     private IReadOnlyList<string> _lanAddresses = [];
+    private IReadOnlyList<(string Network, string Address)> _overlayAddresses = [];
     private DateTimeOffset _lanAddressesAt = DateTimeOffset.MinValue;
     private string? _publicAddress;
     private bool _publicAddressLoading;
@@ -410,6 +411,7 @@ public partial class PrototypeWindow : Window
         if (DateTimeOffset.Now - _lanAddressesAt > TimeSpan.FromSeconds(30))
         {
             _lanAddresses = NetworkAddressService.GetLanAddresses();
+            _overlayAddresses = NetworkAddressService.GetOverlayAddresses();
             _lanAddressesAt = DateTimeOffset.Now;
         }
         var port = profile.Port;
@@ -445,6 +447,9 @@ public partial class PrototypeWindow : Window
         AddRow("Same network (LAN)", lan is null ? null : $"{lan}:{port}", null,
             lan is null ? "No local network connection found." : "Friends on your Wi-Fi or home network.");
 
+        foreach (var (network, address) in _overlayAddresses)
+            AddRow(network, $"{address}:{port}", null, $"Friends who joined your {network} network. No port forwarding needed.");
+
         UIElement publicAction;
         if (_publicAddress is not null) publicAction = new TextBlock();
         else
@@ -463,6 +468,14 @@ public partial class PrototypeWindow : Window
         }
         AddRow("Internet", _publicAddress is null ? null : $"{_publicAddress}:{port}", publicAction,
             lan is null ? $"Forward TCP port {port} on your router to this PC." : $"Needs TCP port {port} forwarded on your router to {lan}.");
+        // Easiest option for people who can't (or don't want to) change router settings.
+        var playit = ActionButton("Open playit.gg", (_, _) =>
+        {
+            try { Process.Start(new ProcessStartInfo("https://playit.gg/download") { UseShellExecute = true }); } catch { }
+        });
+        playit.ToolTip = "Opens playit.gg in your browser. MystTiq doesn't install or run anything for it.";
+        AddRow("No port forwarding?", null, playit,
+            $"Free tunnel service: install its app, add a \"Minecraft Java\" tunnel to local port {port}, and share the address it gives you.");
         stack.Children.Add(rows);
 
         var tip = Muted($"In Minecraft: Multiplayer → Add Server, then paste the address. Port {port} must be different for every server you run at the same time. Windows Firewall may ask to allow Java the first time a server starts; allow it on private networks.");

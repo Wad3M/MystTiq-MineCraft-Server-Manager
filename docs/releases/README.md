@@ -2,7 +2,8 @@
 
 | Version | Notes |
 |---|---|
-| **0.6.0** (current) | [Crash auto-restart](RELEASE_NOTES_v0.6.0.md) |
+| **0.7.0** (current) | [Connect without port forwarding: Tailscale, ZeroTier, Hamachi, Radmin, playit.gg](RELEASE_NOTES_v0.7.0.md) |
+| 0.6.0 | [Crash auto-restart](RELEASE_NOTES_v0.6.0.md) |
 | 0.5.1 | [Code-review fixes: no lost servers, safe backups and restores, tests](RELEASE_NOTES_v0.5.1.md) |
 | 0.5.0 | [How to Connect card with LAN and public addresses](RELEASE_NOTES_v0.5.0.md) |
 | 0.4.2 | [Sidebar collapses to an icon rail](RELEASE_NOTES_v0.4.2.md) |
