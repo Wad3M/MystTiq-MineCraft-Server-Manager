@@ -30,7 +30,7 @@ public partial class PrototypeWindow : Window
     // so existing Navigate("Datapacks") calls keep working.
     private static readonly Dictionary<string, (string Page, string Tab)> PageAliases = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Plugin Packs"] = ("Add-ons", "Plugin Packs"), ["Datapacks"] = ("Add-ons", "Datapacks"), ["Resource Packs"] = ("Add-ons", "Resource Pack"),
+        ["Plugin Packs"] = ("Add-ons", "Plugin Packs"), ["Bedrock Crossplay"] = ("Add-ons", "Bedrock Crossplay"), ["Datapacks"] = ("Add-ons", "Datapacks"), ["Resource Packs"] = ("Add-ons", "Resource Pack"),
         ["Performance"] = ("Health", "Performance"), ["Log Analyzer"] = ("Health", "Logs"), ["Startup Analyzer"] = ("Health", "Startup"), ["Optimization"] = ("Health", "Optimization"),
         ["Auto Backups"] = ("Backups", "Backups"), ["Scheduler"] = ("Backups", "Scheduled Tasks"),
         ["Templates"] = ("Settings", "Presets"), ["About"] = ("Help", "Help")
@@ -297,6 +297,7 @@ public partial class PrototypeWindow : Window
                 "Players" => BuildPlayersPage(),
                 "Add-ons" => Tabs("Add-ons",
                     ("Add-ons", BuildAddonsPage),
+                    ("Bedrock Crossplay", BuildCrossplayPage),
                     ("Plugin Packs", BuildPluginPacksPage),
                     ("Datapacks", BuildDatapacksPage),
                     ("Resource Pack", BuildResourcePacksPage)),
@@ -446,6 +447,10 @@ public partial class PrototypeWindow : Window
         AddRow("This PC", $"localhost:{port}", null, "Play on the same computer that runs the server.");
         AddRow("Same network (LAN)", lan is null ? null : $"{lan}:{port}", null,
             lan is null ? "No local network connection found." : "Friends on your Wi-Fi or home network.");
+
+        if (_backend!.GetBedrockPort(profile) is int bedrockPort)
+            AddRow("Bedrock players", lan is null ? $"localhost:{bedrockPort}" : $"{lan}:{bedrockPort}", null,
+                $"Phones, consoles and Windows Bedrock: use this address and port. Over the internet, forward UDP port {bedrockPort} too.");
 
         foreach (var (network, address) in _overlayAddresses)
             AddRow(network, $"{address}:{port}", null, $"Friends who joined your {network} network. No port forwarding needed.");
@@ -966,6 +971,65 @@ public partial class PrototypeWindow : Window
         return root;
     }
 
+    /// <summary>
+    /// Bedrock crossplay: installs Geyser + Floodgate so Bedrock players (phones, consoles,
+    /// Windows) can join this Java server, and lets you pick the Bedrock UDP port.
+    /// </summary>
+    private UIElement BuildCrossplayPage()
+    {
+        if (!TrySelected(out var profile, out var unavailable)) return unavailable;
+        if (AddonKinds.For(profile) == AddonKind.None || profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase))
+            return MessagePage("Bedrock Crossplay", $"Crossplay needs a Paper, Purpur or Fabric server. {profile.Name} runs {profile.Type}.");
+
+        var card = Card(); card.Padding = new Thickness(16);
+        var stack = new StackPanel(); card.Child = stack;
+        stack.Children.Add(TitleRow("players", "Let Bedrock players join"));
+        stack.Children.Add(Muted("Installs Geyser and Floodgate from Modrinth. Bedrock players on phones, consoles and Windows can then join this Java server without owning Java Edition. Java players are unaffected."));
+
+        var installed = _backend!.IsCrossplayInstalled(profile);
+        var port = _backend.GetBedrockPort(profile);
+        var state = !installed ? "Not installed."
+            : port is null ? "Installed. Start the server once so Geyser creates its settings; MystTiq then picks a free Bedrock port."
+            : $"Installed. Bedrock players connect on UDP port {port}.";
+        stack.Children.Add(new TextBlock { Text = state, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 6), TextWrapping = TextWrapping.Wrap });
+
+        var buttons = new WrapPanel();
+        if (!installed)
+        {
+            buttons.Children.Add(ActionButton("Install Crossplay", async (_, _) =>
+            {
+                try
+                {
+                    PrototypeStatus.Text = "Installing Geyser and Floodgate…";
+                    var names = await _backend.InstallCrossplayAsync();
+                    MessageBox.Show(this, $"Installed {string.Join(", ", names)}.\n\nRestart the server to turn crossplay on.", "Bedrock Crossplay", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex) { ShowError("Could not install crossplay", ex); }
+                Navigate("Bedrock Crossplay");
+            }, "GreenActionButton"));
+        }
+        else if (port is int current)
+        {
+            var portBox = new TextBox { Text = current.ToString(), Width = 80, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+            buttons.Children.Add(new TextBlock { Text = "Bedrock UDP port", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+            buttons.Children.Add(portBox);
+            buttons.Children.Add(ActionButton("Save Port", (_, _) =>
+            {
+                try
+                {
+                    if (!int.TryParse(portBox.Text, out var chosen)) throw new InvalidOperationException("Enter a port number.");
+                    _backend.ConfigureCrossplay(profile, chosen);
+                    MessageBox.Show(this, $"Bedrock port set to {chosen}. Restart the server for it to take effect.", "Bedrock Crossplay");
+                }
+                catch (Exception ex) { ShowError("Could not save the Bedrock port", ex); }
+                Navigate("Bedrock Crossplay");
+            }));
+        }
+        stack.Children.Add(buttons);
+        stack.Children.Add(Muted("Each crossplay server needs its own Bedrock port. MystTiq moves it automatically if two running servers would clash. To play over the internet, forward this UDP port on your router as well as the Java TCP port."));
+        return card;
+    }
+
     private async Task InstallAddonAsync(Func<Task<PluginRecord>> install, string name)
     {
         try
@@ -1373,7 +1437,7 @@ public partial class PrototypeWindow : Window
         "Console" => "Live output and commands for the selected server",
         "Players" => "Who's online, with op, kick, and ban",
         "Worlds" => "Import, rename, archive, and delete worlds",
-        "Add-ons" => "Plugins or mods, plugin packs, datapacks, and the resource pack",
+        "Add-ons" => "Plugins or mods, Bedrock crossplay, plugin packs, datapacks, and the resource pack",
         "Backups" => "Manual and automatic backups, and scheduled tasks",
         "Health" => "Health checks, performance, logs, startup, and optimization",
         "Settings" => "Server profile, server.properties, and presets",

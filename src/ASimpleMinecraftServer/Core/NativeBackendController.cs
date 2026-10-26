@@ -345,6 +345,7 @@ public sealed class NativeBackendController : IDisposable
         if (instance.IsRunning) throw new InvalidOperationException($"{profile.Name} is already running.");
         ValidateStart(profile);
         EnsurePortAvailable(profile);
+        EnsureBedrockPortAvailable(profile, instance);
         instance.Launcher.Start(profile);
         instance.StartedAt = DateTimeOffset.Now;
         profile.RuntimeState = "Running";
@@ -548,6 +549,65 @@ public sealed class NativeBackendController : IDisposable
         if (string.IsNullOrWhiteSpace(profile.Version) || profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Set this server's Minecraft version in Settings first, so MystTiq can pick compatible add-ons.");
         return (profile, kind);
+    }
+
+    // ---- Bedrock crossplay (Geyser + Floodgate) ----
+
+    public bool IsCrossplayInstalled(ServerProfile profile) => GeyserConfig.IsInstalled(profile, Plugins.List(profile));
+
+    /// <summary>The server's Bedrock UDP port, or null until Geyser has created its config (first start).</summary>
+    public int? GetBedrockPort(ServerProfile profile) => Directory.Exists(profile.Folder) ? GeyserConfig.GetBedrockPort(profile.Folder) : null;
+
+    /// <summary>
+    /// Installs Geyser and Floodgate from Modrinth (exact projects, hash checked) so Bedrock players
+    /// (phones, consoles, Windows) can join. On Fabric, Fabric API is installed too if missing.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> InstallCrossplayAsync(CancellationToken cancellationToken = default)
+    {
+        var (profile, kind) = RequireAddonServer();
+        if (profile.Type.Equals("Folia", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Geyser doesn't support Folia servers. Use Paper, Purpur or Fabric for crossplay.");
+        var installed = new List<string>();
+        if (kind == AddonKind.Mod && !Plugins.List(profile).Any(p => p.FileName.StartsWith("fabric-api", StringComparison.OrdinalIgnoreCase)))
+            installed.Add((await InstallAddonByIdAsync("fabric-api", cancellationToken)).Name);
+        installed.Add((await InstallAddonByIdAsync("geyser", cancellationToken)).Name);
+        installed.Add((await InstallAddonByIdAsync("floodgate", cancellationToken)).Name);
+        ConfigureCrossplay(profile, SuggestBedrockPort(profile));
+        return installed;
+    }
+
+    /// <summary>Writes the Bedrock port (and Floodgate login) into Geyser's config. False if Geyser hasn't made its config yet.</summary>
+    public bool ConfigureCrossplay(ServerProfile profile, int bedrockPort)
+    {
+        if (bedrockPort is < 1 or > 65535) throw new InvalidOperationException("The Bedrock port must be between 1 and 65535.");
+        var floodgate = Plugins.List(profile).Any(p => p.Name.Contains("floodgate", StringComparison.OrdinalIgnoreCase) || p.FileName.Contains("floodgate", StringComparison.OrdinalIgnoreCase));
+        return GeyserConfig.Configure(profile.Folder, bedrockPort, floodgate);
+    }
+
+    /// <summary>The first UDP port from 19132 that no other server's Geyser uses and nothing is listening on.</summary>
+    public int SuggestBedrockPort(ServerProfile profile)
+    {
+        var used = Servers.Where(s => !ReferenceEquals(s, profile) && Directory.Exists(s.Folder))
+            .Select(s => GeyserConfig.GetBedrockPort(s.Folder)).OfType<int>().ToHashSet();
+        try { foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners()) used.Add(endpoint.Port); }
+        catch (NetworkInformationException) { }
+        var port = GeyserConfig.DefaultBedrockPort;
+        while (used.Contains(port) && port < 65535) port++;
+        return port;
+    }
+
+    /// <summary>
+    /// Before starting, moves this server's Bedrock port if another running server already uses it,
+    /// so two crossplay servers never fight over UDP 19132.
+    /// </summary>
+    private void EnsureBedrockPortAvailable(ServerProfile profile, ServerInstance instance)
+    {
+        if (GetBedrockPort(profile) is not int bedrock) return;
+        var clash = RunningServers.Any(s => !ReferenceEquals(s, profile) && GetBedrockPort(s) == bedrock);
+        if (!clash) return;
+        var free = SuggestBedrockPort(profile);
+        if (ConfigureCrossplay(profile, free))
+            instance.AddConsole($"[Manager] Bedrock port {bedrock} is used by another running server; moved this server's Bedrock port to {free}.");
     }
 
     public async Task<PluginPackResult> InstallPluginPackAsync(PluginPack pack, CancellationToken cancellationToken = default)

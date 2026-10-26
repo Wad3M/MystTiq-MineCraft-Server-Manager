@@ -189,3 +189,60 @@ public class OverlayNetworkTests
     public void Classifies_overlay_networks(string description, string address, string? expected) =>
         Assert.Equal(expected, NetworkAddressService.ClassifyOverlay(description, address));
 }
+
+public class GeyserConfigTests
+{
+    private const string Sample = """
+        # Geyser configuration
+        bedrock:
+          # The IP address that will listen for connections.
+          address: 0.0.0.0
+          # The port that will listen for connections
+          port: 19132
+          clone-remote-port: false
+        remote:
+          address: auto
+          port: 25565
+          auth-type: online
+        """;
+
+    [Fact]
+    public void Reads_and_sets_only_the_bedrock_port()
+    {
+        using var dir = new TempDir();
+        var path = dir.File(Path.Combine("plugins", "Geyser-Spigot", "config.yml"), Sample);
+
+        Assert.Equal(19132, GeyserConfig.GetBedrockPort(dir.Path));
+        Assert.True(GeyserConfig.Configure(dir.Path, 19133, useFloodgate: true));
+
+        var lines = File.ReadAllLines(path);
+        Assert.Equal(19133, GeyserConfig.GetBedrockPort(dir.Path));
+        Assert.Equal("25565", GeyserConfig.ReadKeyInSection(lines, "remote", "port"));       // Java port untouched
+        Assert.Equal("floodgate", GeyserConfig.ReadKeyInSection(lines, "remote", "auth-type"));
+        Assert.Contains(lines, l => l.Trim() == "# The port that will listen for connections"); // comments kept
+    }
+
+    [Fact]
+    public void No_config_until_geyser_has_run()
+    {
+        using var dir = new TempDir();
+        Assert.Null(GeyserConfig.GetBedrockPort(dir.Path));
+        Assert.False(GeyserConfig.Configure(dir.Path, 19133, useFloodgate: false));
+    }
+
+    [Fact]
+    public void Finds_the_fabric_config_location()
+    {
+        using var dir = new TempDir();
+        dir.File(Path.Combine("config", "Geyser-Fabric", "config.yml"), Sample);
+        Assert.Equal(19132, GeyserConfig.GetBedrockPort(dir.Path));
+    }
+
+    [Fact]
+    public void Keeps_trailing_comments_when_setting_a_value()
+    {
+        var lines = new List<string> { "bedrock:", "  port: 19132 # default" };
+        GeyserConfig.SetKeyInSection(lines, "bedrock", "port", "19140");
+        Assert.Equal("  port: 19140 # default", lines[1]);
+    }
+}

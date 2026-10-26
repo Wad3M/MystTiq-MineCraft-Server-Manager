@@ -10,9 +10,9 @@
     <AssemblyName>ASimpleMinecraftServer</AssemblyName>
     <RootNamespace>ASimpleMinecraftServer</RootNamespace>
     <Copyright>Copyright (c) 2026 Wad3M. MIT License.</Copyright>
-    <Version>0.8.0</Version>
-    <FileVersion>0.8.0.0</FileVersion>
-    <AssemblyVersion>0.8.0.0</AssemblyVersion>
+    <Version>0.9.0</Version>
+    <FileVersion>0.9.0.0</FileVersion>
+    <AssemblyVersion>0.9.0.0</AssemblyVersion>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>

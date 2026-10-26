@@ -4,7 +4,7 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.8.0, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.9.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
@@ -15,6 +15,7 @@ Pick a server type and version, give it a name, and the app downloads it, sets i
 - **Start, stop, restart, and a live console.** Graceful stop, with a warning before any force kill.
 - **Backups.** Manual or scheduled, with a retention limit and automatic safety backups before updates.
 - **Add-ons: plugins and mods.** Paper, Purpur, and Folia servers get plugins; Fabric servers get mods. Search Modrinth in the app (only compatible, server-side results), install with one click (SHA-512 verified), or add a JAR from a file.
+- **Bedrock crossplay.** One click installs Geyser and Floodgate so phone, console and Windows Bedrock players can join, each server with its own Bedrock port.
 - **Modpacks.** Create a server from a Modrinth `.mrpack` file: the right Minecraft and Fabric versions, every server-side mod (hash checked), and the pack's config.
 - **Datapacks.** Install, enable, disable, or remove them.
 - **Worlds and players.** Import, rename, and archive worlds. Op, kick, or ban players.
@@ -98,7 +99,6 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 | Version | Planned |
 |---|---|
-| 0.9.0 | Bedrock crossplay with Geyser and Floodgate |
 | 0.10.0 | Whitelist and operators editor |
 | 0.11.0 | Forge and NeoForge server types |
 
@@ -112,4 +112,4 @@ Windows releases are being set up for free code signing through [SignPath Founda
 
 ## Release notes
 
-The latest is [v0.8.0](docs/releases/RELEASE_NOTES_v0.8.0.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.9.0](docs/releases/RELEASE_NOTES_v0.9.0.md). See [`docs/releases/`](docs/releases/) for all versions.
