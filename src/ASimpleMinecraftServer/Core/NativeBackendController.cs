@@ -51,6 +51,7 @@ public sealed class NativeBackendController : IDisposable
         get { lock (_instances) return _instances.Values.Where(i => i.IsRunning).Select(i => i.Profile).ToList(); }
     }
     public bool IsServerRunning(ServerProfile profile) => GetInstance(profile).IsRunning;
+    public bool IsRestartPending(ServerProfile profile) => GetInstance(profile).PendingRestart is not null;
     public string DataDirectory { get; }
     public string BackupRoot => Backups.BackupRoot;
     public IReadOnlyList<string> SupportedServerTypes => VersionManager.SupportedServerTypes;
@@ -272,7 +273,16 @@ public sealed class NativeBackendController : IDisposable
 
     public Task StartAsync(CancellationToken cancellationToken = default) => StartAsync(RequireSelected(), cancellationToken);
 
-    public async Task StartAsync(ServerProfile profile, CancellationToken cancellationToken = default)
+    /// <summary>Starts a server at the user's request; cancels any pending crash restart and resets its count.</summary>
+    public Task StartAsync(ServerProfile profile, CancellationToken cancellationToken = default)
+    {
+        var instance = GetInstance(profile);
+        instance.CancelPendingRestart();
+        instance.CrashRestarts.Reset();
+        return StartCoreAsync(profile, cancellationToken);
+    }
+
+    private async Task StartCoreAsync(ServerProfile profile, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var instance = GetInstance(profile);
@@ -294,6 +304,14 @@ public sealed class NativeBackendController : IDisposable
     public async Task<bool> StopGracefullyAsync(ServerProfile profile, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         var instance = GetInstance(profile);
+        if (instance.PendingRestart is not null)
+        {
+            instance.CancelPendingRestart();
+            instance.AddConsole("[Manager] Automatic restart cancelled.");
+            profile.RuntimeState = "Stopped";
+            StateChanged?.Invoke(this, EventArgs.Empty);
+        }
+        instance.CrashRestarts.Reset();
         if (!instance.IsRunning) return true;
         instance.AddConsole("[Manager] Sending graceful stop command...");
         var stopped = await instance.Launcher.TryStopGracefullyAsync(timeout, cancellationToken);
@@ -306,6 +324,8 @@ public sealed class NativeBackendController : IDisposable
     public async Task ForceKillAsync(ServerProfile profile, CancellationToken cancellationToken = default)
     {
         var instance = GetInstance(profile);
+        instance.CancelPendingRestart();
+        instance.CrashRestarts.Reset();
         if (!instance.IsRunning) return;
         instance.AddConsole("[Manager] Force-terminating the Java process.");
         await instance.Launcher.ForceKillAsync(cancellationToken);
@@ -328,7 +348,19 @@ public sealed class NativeBackendController : IDisposable
             var stopped = await StopGracefullyAsync(profile, timeout, cancellationToken);
             if (!stopped) throw new TimeoutException("The server did not stop gracefully. Force kill it before restarting.");
         }
-        await StartAsync(profile, cancellationToken);
+        await StartCoreAsync(profile, cancellationToken);
+    }
+
+    /// <summary>Turns crash auto-restart on or off for a server and sets how many restarts are allowed.</summary>
+    public void SetCrashRecovery(ServerProfile profile, bool enabled, int restartLimit, int windowMinutes, int delaySeconds)
+    {
+        profile.CrashRecoveryEnabled = enabled;
+        profile.CrashRestartLimit = Math.Clamp(restartLimit, 1, 20);
+        profile.CrashRestartWindowMinutes = Math.Clamp(windowMinutes, 1, 1440);
+        profile.CrashRestartDelaySeconds = Math.Clamp(delaySeconds, 0, 600);
+        if (!enabled) GetInstance(profile).CancelPendingRestart();
+        SaveProfiles();
+        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SendCommand(string command) => SendCommand(RequireSelected(), command);
@@ -583,7 +615,50 @@ public sealed class NativeBackendController : IDisposable
         profile.RuntimeState = e.StopWasRequested ? "Stopped" : "Failed";
         var text = e.WasForceKilled ? "force killed" : e.StopWasRequested ? "stopped" : "exited unexpectedly";
         instance.AddConsole($"[Manager] Server {text}{(e.ExitCode is int code ? $" (exit code {code})" : string.Empty)}.");
+        if (CrashRestartPolicy.IsCrash(e) && profile.CrashRecoveryEnabled) ScheduleCrashRestart(instance);
         StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// After a crash, waits the configured delay and starts the server again, unless the restart
+    /// limit for the time window is used up or the user starts, stops or removes it first.
+    /// </summary>
+    private void ScheduleCrashRestart(ServerInstance instance)
+    {
+        var profile = instance.Profile;
+        var window = TimeSpan.FromMinutes(Math.Max(1, profile.CrashRestartWindowMinutes));
+        if (!instance.CrashRestarts.TryRegisterRestart(DateTimeOffset.Now, profile.CrashRestartLimit, window, out var attempt))
+        {
+            instance.AddConsole($"[Manager] {profile.Name} crashed {attempt} time(s) within {window.TotalMinutes:0} minutes. Not restarting again; check the Health → Logs tab, then start it yourself.");
+            profile.RuntimeState = "Failed";
+            return;
+        }
+
+        var delay = TimeSpan.FromSeconds(Math.Max(0, profile.CrashRestartDelaySeconds));
+        instance.CancelPendingRestart();
+        var cancel = new CancellationTokenSource();
+        instance.PendingRestart = cancel;
+        profile.RuntimeState = "Restarting";
+        instance.AddConsole($"[Manager] Restarting {profile.Name} in {delay.TotalSeconds:0} seconds (automatic restart {attempt} of {profile.CrashRestartLimit}).");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay, cancel.Token);
+                if (!ReferenceEquals(instance.PendingRestart, cancel) || instance.IsRunning || !Servers.Contains(profile)) return;
+                instance.PendingRestart = null;
+                cancel.Dispose();
+                await StartCoreAsync(profile, CancellationToken.None);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                instance.AddConsole($"[Manager] Automatic restart failed: {ex.Message}");
+                profile.RuntimeState = "Failed";
+                StateChanged?.Invoke(this, EventArgs.Empty);
+            }
+        });
     }
 
     /// <summary>

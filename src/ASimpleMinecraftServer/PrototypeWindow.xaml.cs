@@ -497,14 +497,16 @@ public partial class PrototypeWindow : Window
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var name = new TextBlock { Text = (ReferenceEquals(profile, _backend.SelectedServer) ? "▶ " : string.Empty) + profile.Name, FontWeight = FontWeights.SemiBold };
             text.Children.Add(name);
-            text.Children.Add(Muted($"{profile.Type} {profile.Version}   •   Port {profile.Port}   •   {profile.MemoryGb} GB   •   {(running ? profile.RuntimeState : Directory.Exists(profile.Folder) ? "Stopped" : "Folder missing (drive disconnected?)")}"));
+            text.Children.Add(Muted($"{profile.Type} {profile.Version}   •   Port {profile.Port}   •   {profile.MemoryGb} GB   •   {(running || _backend.IsRestartPending(profile) || profile.RuntimeState == "Failed" ? profile.RuntimeState : Directory.Exists(profile.Folder) ? "Stopped" : "Folder missing (drive disconnected?)")}"));
             row.Children.Add(text);
 
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             var target = profile;
             if (!ReferenceEquals(profile, _backend.SelectedServer))
                 buttons.Children.Add(ActionButton("Select", (_, _) => ServerPicker.SelectedItem = target));
-            buttons.Children.Add(running
+            if (_backend.IsRestartPending(profile))
+                buttons.Children.Add(ActionButton("Cancel restart", async (_, _) => await RunServerAction("Cancel restart", target, b => b.StopGracefullyAsync(target, TimeSpan.FromSeconds(1)))));
+            else buttons.Children.Add(running
                 ? ActionButton("Stop", async (_, _) => await RunServerAction("Stop", target, async b =>
                     {
                         if (!await b.StopGracefullyAsync(target, TimeSpan.FromSeconds(20)))
@@ -1063,8 +1065,26 @@ public partial class PrototypeWindow : Window
         var mcVersion = new TextBox { Text = profile.Version.Equals("Detected", StringComparison.OrdinalIgnoreCase) ? string.Empty : profile.Version, Margin = new Thickness(0, 3, 0, 8), ToolTip = "The Minecraft version this server runs, e.g. 1.21.4" };
         stack.Children.Add(new TextBlock { Text = "Name" }); stack.Children.Add(name);
         stack.Children.Add(new TextBlock { Text = "Server type" }); stack.Children.Add(serverType);
-        stack.Children.Add(new TextBlock { Text = "Minecraft version" }); stack.Children.Add(mcVersion); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
-        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; try { _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text, serverType.Text, mcVersion.Text); } catch (Exception ex) { ShowError("Could not save the profile", ex); } Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder)));
+        stack.Children.Add(new TextBlock { Text = "Minecraft version" }); stack.Children.Add(mcVersion);
+        // Crash auto-restart (applies when the server exits with an error that nobody asked for).
+        var crashRestart = new CheckBox { Content = "Restart automatically if the server crashes", IsChecked = profile.CrashRecoveryEnabled, Margin = new Thickness(0, 4, 0, 4) };
+        var crashLimit = new TextBox { Text = profile.CrashRestartLimit.ToString(), Width = 50, Margin = new Thickness(6, 0, 6, 0) };
+        var crashWindow = new TextBox { Text = profile.CrashRestartWindowMinutes.ToString(), Width = 50, Margin = new Thickness(6, 0, 6, 0) };
+        var crashDelay = new TextBox { Text = profile.CrashRestartDelaySeconds.ToString(), Width = 50, Margin = new Thickness(6, 0, 6, 0) };
+        var crashRow = new WrapPanel { Margin = new Thickness(20, 0, 0, 8) };
+        crashRow.Children.Add(new TextBlock { Text = "Up to", VerticalAlignment = VerticalAlignment.Center }); crashRow.Children.Add(crashLimit);
+        crashRow.Children.Add(new TextBlock { Text = "restarts within", VerticalAlignment = VerticalAlignment.Center }); crashRow.Children.Add(crashWindow);
+        crashRow.Children.Add(new TextBlock { Text = "minutes, waiting", VerticalAlignment = VerticalAlignment.Center }); crashRow.Children.Add(crashDelay);
+        crashRow.Children.Add(new TextBlock { Text = "seconds first", VerticalAlignment = VerticalAlignment.Center });
+        stack.Children.Add(crashRestart); stack.Children.Add(crashRow); stack.Children.Add(new TextBlock { Text = "Memory (GB)" }); stack.Children.Add(memory); stack.Children.Add(new TextBlock { Text = "Java executable" }); stack.Children.Add(java); stack.Children.Add(new TextBlock { Text = "Server JAR" }); stack.Children.Add(jar);
+        var buttons = new WrapPanel(); buttons.Children.Add(ActionButton("Browse Java…", (_, _) => { var f = PickFile("Java executable (java.exe)|java.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*"); if (f is not null) java.Text = f; })); buttons.Children.Add(ActionButton("Save Profile", (_, _) => { if (!int.TryParse(memory.Text, out var gb)) gb = profile.MemoryGb; try
+            {
+                _backend!.UpdateSelectedProfile(name.Text, gb, java.Text, jar.Text, serverType.Text, mcVersion.Text);
+                _backend.SetCrashRecovery(profile, crashRestart.IsChecked == true,
+                    int.TryParse(crashLimit.Text, out var limit) ? limit : profile.CrashRestartLimit,
+                    int.TryParse(crashWindow.Text, out var window) ? window : profile.CrashRestartWindowMinutes,
+                    int.TryParse(crashDelay.Text, out var delay) ? delay : profile.CrashRestartDelaySeconds);
+            } catch (Exception ex) { ShowError("Could not save the profile", ex); } Navigate("Settings"); }, "GreenActionButton")); buttons.Children.Add(ActionButton("Open Server Folder", (_, _) => OpenFolder(profile.Folder)));
         buttons.Children.Add(ActionButton("Remove from List…", (_, _) =>
         {
             if (!Confirm($"Remove '{profile.Name}' from MystTiq?\n\nOnly the list entry is removed. The server folder, worlds and backups stay on disk, and you can add it back with Create Server → Add Existing Server.")) return;

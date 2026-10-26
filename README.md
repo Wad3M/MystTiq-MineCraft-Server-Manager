@@ -4,7 +4,7 @@ A simple Windows app for creating and running Minecraft servers.
 
 Pick a server type and version, give it a name, and the app downloads it, sets it up, and gives you a start button and a console. The main goal is to **run several different servers side by side**, for example a Paper survival server, a Fabric modded server, and a Vanilla test world, each on its own port, from one window.
 
-> **Status:** v0.5.1, an early release. Multi-server support is new, so please report anything odd.
+> **Status:** v0.6.0, an early release. Multi-server support is new, so please report anything odd.
 
 ## Features
 
@@ -17,6 +17,7 @@ Pick a server type and version, give it a name, and the app downloads it, sets i
 - **Add-ons: plugins and mods.** Paper, Purpur, and Folia servers get plugins; Fabric servers get mods. Search Modrinth in the app (only compatible, server-side results), install with one click (SHA-512 verified), or add a JAR from a file.
 - **Datapacks.** Install, enable, disable, or remove them.
 - **Worlds and players.** Import, rename, and archive worlds. Op, kick, or ban players.
+- **Crash auto-restart.** A crashed server restarts itself, with a limit so a broken server can't loop forever.
 - **Diagnostics.** Health, log, startup, and performance checks. They only read files and never change a server unless you tell them to.
 - **Minecraft-style icons.** The UI uses the MystCraft icon pack.
 
@@ -94,11 +95,13 @@ The version lives in one place: `<Version>` in `src/ASimpleMinecraftServer/ASimp
 
 ## Roadmap
 
-1. **Crash auto-restart.** The per-server crash recovery settings exist but are not wired up yet.
-2. **Forge and NeoForge** server types, with their mods on the Add-ons page.
-3. **Modpack import** from Modrinth `.mrpack` files.
-4. **"How friends join" card** showing the address and port to share.
-5. **Whitelist** on/off with a player list.
+| Version | Planned |
+|---|---|
+| 0.7.0 | Play without port forwarding: Tailscale, ZeroTier, Hamachi and Radmin addresses, plus playit.gg |
+| 0.8.0 | Modrinth modpack (`.mrpack`) import |
+| 0.9.0 | Bedrock crossplay with Geyser and Floodgate |
+| 0.10.0 | Whitelist and operators editor |
+| 0.11.0 | Forge and NeoForge server types |
 
 ## Code signing and privacy
 
@@ -110,4 +113,4 @@ Windows releases are being set up for free code signing through [SignPath Founda
 
 ## Release notes
 
-The latest is [v0.5.1](docs/releases/RELEASE_NOTES_v0.5.1.md). See [`docs/releases/`](docs/releases/) for all versions.
+The latest is [v0.6.0](docs/releases/RELEASE_NOTES_v0.6.0.md). See [`docs/releases/`](docs/releases/) for all versions.

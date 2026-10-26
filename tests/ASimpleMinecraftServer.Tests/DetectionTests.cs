@@ -125,3 +125,52 @@ public class ServerFolderInspectorTests
         Assert.Equal("Paper/Spigot", ServerFolderInspector.DetectServerType(dir.Path, "server.jar"));
     }
 }
+
+public class CrashRestartPolicyTests
+{
+    private static readonly DateTimeOffset T0 = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData(false, 1, true)]    // exited with an error, nobody asked: crash
+    [InlineData(false, null, true)] // exit code unknown: treat as crash
+    [InlineData(false, 0, false)]   // clean exit (e.g. /stop in game): not a crash
+    [InlineData(true, 1, false)]    // user stopped or killed it: not a crash
+    public void Classifies_crashes(bool stopRequested, int? exitCode, bool expected) =>
+        Assert.Equal(expected, CrashRestartPolicy.IsCrash(new ServerProcessExitedEventArgs { StopWasRequested = stopRequested, ExitCode = exitCode }));
+
+    [Fact]
+    public void Allows_restarts_up_to_the_limit_within_the_window()
+    {
+        var policy = new CrashRestartPolicy();
+        var window = TimeSpan.FromMinutes(15);
+
+        Assert.True(policy.TryRegisterRestart(T0, 3, window, out var first));
+        Assert.True(policy.TryRegisterRestart(T0.AddMinutes(1), 3, window, out _));
+        Assert.True(policy.TryRegisterRestart(T0.AddMinutes(2), 3, window, out var third));
+        Assert.False(policy.TryRegisterRestart(T0.AddMinutes(3), 3, window, out var refused));
+
+        Assert.Equal(1, first);
+        Assert.Equal(3, third);
+        Assert.Equal(3, refused);
+    }
+
+    [Fact]
+    public void Old_crashes_fall_out_of_the_window()
+    {
+        var policy = new CrashRestartPolicy();
+        var window = TimeSpan.FromMinutes(15);
+        policy.TryRegisterRestart(T0, 1, window, out _);
+
+        Assert.False(policy.TryRegisterRestart(T0.AddMinutes(10), 1, window, out _));
+        Assert.True(policy.TryRegisterRestart(T0.AddMinutes(16), 1, window, out _));
+    }
+
+    [Fact]
+    public void Reset_forgets_earlier_crashes()
+    {
+        var policy = new CrashRestartPolicy();
+        policy.TryRegisterRestart(T0, 1, TimeSpan.FromHours(1), out _);
+        policy.Reset();
+        Assert.True(policy.TryRegisterRestart(T0.AddSeconds(1), 1, TimeSpan.FromHours(1), out _));
+    }
+}

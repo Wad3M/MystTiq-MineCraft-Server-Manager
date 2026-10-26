@@ -25,6 +25,16 @@ public sealed class ServerInstance : IDisposable
     public ServerProfile Profile { get; }
     public ServerLauncher Launcher { get; } = new();
     public DateTimeOffset? StartedAt { get; set; }
+    public CrashRestartPolicy CrashRestarts { get; } = new();
+    /// <summary>Cancels a pending automatic restart (set while waiting to restart after a crash).</summary>
+    public CancellationTokenSource? PendingRestart { get; set; }
+
+    public void CancelPendingRestart()
+    {
+        PendingRestart?.Cancel();
+        PendingRestart?.Dispose();
+        PendingRestart = null;
+    }
 
     public bool IsRunning => Launcher.IsRunning;
     public bool IsRecoveredProcess => Launcher.IsAttachedProcess;
@@ -117,6 +127,7 @@ public sealed class ServerInstance : IDisposable
 
     public void Dispose()
     {
+        CancelPendingRestart();
         Launcher.OutputReceived -= Launcher_OutputReceived;
         Launcher.Exited -= Launcher_Exited;
         Launcher.Dispose();

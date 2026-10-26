@@ -120,6 +120,8 @@ public sealed class ServerLauncher : IDisposable
     public void SendCommand(string command)
     {
         if (!CanSendCommands || string.IsNullOrWhiteSpace(command)) return;
+        // A "stop" typed in the console is a requested shutdown, not a crash.
+        if (command.Trim().TrimStart('/').Equals("stop", StringComparison.OrdinalIgnoreCase)) _stopRequested = true;
         _process!.StandardInput.WriteLine(command);
         _process.StandardInput.Flush();
     }
